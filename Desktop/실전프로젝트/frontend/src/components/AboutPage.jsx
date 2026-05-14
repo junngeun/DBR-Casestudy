@@ -93,37 +93,37 @@ const styles = {
     overflow: "hidden",
   },
   showcaseInput: {
-    background: "#faf7f4",
+    background: "#f5f5f5",
     padding: "12px 16px",
     borderBottom: "0.5px solid #ede8e2",
   },
   showcaseInputBadge: {
-    fontSize: 10,
+    fontSize: 12,
     color: ORANGE,
     fontWeight: 600,
     letterSpacing: "0.5px",
     marginBottom: 6,
   },
   showcaseInputText: {
-    fontSize: 13,
+    fontSize: 15,
     color: "#6b6258",
     lineHeight: 1.55,
   },
   showcaseResult: { padding: "12px 16px" },
   showcaseResultBadge: {
-    fontSize: 10,
+    fontSize: 12,
     color: "#aaa",
     marginBottom: 8,
     letterSpacing: "0.5px",
   },
   caseChip: {
     display: "inline-block",
-    padding: "3px 10px",
+    padding: "4px 12px",
     margin: "2px 3px 2px 0",
     background: ORANGE_LIGHT,
     color: "#C44010",
     borderRadius: 2,
-    fontSize: 12,
+    fontSize: 14,
   },
   tipGrid: {
     display: "grid",
@@ -145,7 +145,7 @@ const styles = {
   },
   tipBadgeGood: {
     display: "inline-block",
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: 600,
     padding: "2px 10px",
     borderRadius: 2,
@@ -156,7 +156,7 @@ const styles = {
   },
   tipBadgeBad: {
     display: "inline-block",
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: 600,
     padding: "2px 10px",
     borderRadius: 2,
@@ -195,8 +195,8 @@ const styles = {
     lineHeight: 1.65,
   },
   ctaBox: {
-    background: ORANGE_LIGHT,
-    border: `0.5px solid ${ORANGE_BORDER}`,
+    background: "#ffffff",
+    border: `0.5px solid #E86F00`,
     borderRadius: 2,
     padding: "24px 28px",
     display: "flex",
@@ -621,15 +621,15 @@ function FlowDiagram() {
 }
 
 const FEATURES = [
-  { icon: <Search size={18} />, title: "자연어 검색", desc: "키워드 없이 상황을 설명하면 관련 케이스를 찾아드립니다." },
-  { icon: <Map size={18} />, title: "클러스터 맵", desc: "케이스 간 관계를 시각적으로 탐색할 수 있습니다." },
-  { icon: <Files size={18} />, title: "케이스 비교", desc: "최대 3개 케이스를 나란히 놓고 공통점·차이점을 확인합니다." },
-  { icon: <Bookmark size={18} />, title: "맞춤 추천", desc: "전략·마케팅·신사업 등 실무 목적에 맞는 케이스를 추천합니다." },
+  { icon: <Search size={18} />, title: "자연어 검색", desc: "지금 겪고 있는 상황을 그대로 적어주세요. 키워드 없이도 딱 맞는 케이스를 찾아드려요." },
+  { icon: <Map size={18} />, title: "클러스터 맵", desc: "비슷한 케이스끼리 묶어 한눈에 보여드려요. 생각지 못한 케이스를 발견할 수도 있어요." },
+  { icon: <Files size={18} />, title: "케이스 비교", desc: "마음에 드는 케이스를 최대 3개 골라 나란히 비교해보세요. 공통점과 차이점이 한눈에 보여요." },
+  { icon: <Bookmark size={18} />, title: "맞춤 추천", desc: "전략·마케팅·신사업 등 내 고민과 가장 가까운 케이스를 추천합니다." },
 ];
 
 const SHOWCASES = [
   { input: "브랜드 인지도는 높은데 구매 전환이 안 돼요", cases: ["동원 빙글레 브랜드 전략", "롯데 슬롯 성공 전략"] },
-  { input: "신사업 진입 전략을 세워야 하는데 어디서부터 시작해야 할지 모르겠어요", cases: ["카카오 IP 확장 전략", "샐러드랄랄라 AI 플랫폼"] },
+  { input: "신사업 진입 전략, 어디서부터 시작해야 할지 모르겠어요", cases: ["카카오 IP 확장 전략", "샐러드랄랄라 AI 플랫폼"] },
 ];
 
 const TIPS_GOOD = [
@@ -749,7 +749,7 @@ export default function AboutPage({ onStart }) {
             style={{ ...styles.btn, background: btnHover ? "#C45E00" : "#E86F00" }}
             onMouseEnter={() => setBtnHover(true)}
             onMouseLeave={() => setBtnHover(false)}
-            onClick={onStart}
+            onClick={() => { window.scrollTo(0, 0); onStart(); }}
           >
             케이스 탐색 시작
           </button>

@@ -374,9 +374,7 @@ function SlidePanel({ caseData, isHighlighted, onClose }) {
 const styles = {
   wrapper: {
     fontFamily: "'Pretendard', 'Apple SD Gothic Neo', sans-serif",
-    maxWidth: 960,
-    margin: "0 auto",
-    padding: "0.5rem 1.5rem",
+    padding: "0.5rem 0",
   },
   header: {
     display: "flex",
@@ -386,7 +384,7 @@ const styles = {
     flexWrap: "wrap",
     gap: 12,
   },
-  headerLabel: { fontSize: 14, letterSpacing: "0.1em", textTransform: "uppercase", color: "#999", marginBottom: 2 },
+  headerLabel: { fontSize: 15, letterSpacing: "0.1em", textTransform: "uppercase", color: "#999", marginBottom: 2 },
   headerTitle: { fontSize: 25, fontWeight: 500, color: "#1a1a1a" },
   legend: { display: "flex", flexWrap: "wrap", gap: "6px 14px", maxWidth: 460 },
   legendItem: { display: "flex", alignItems: "center", gap: 5 },
