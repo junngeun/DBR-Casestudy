@@ -24,12 +24,12 @@ const styles = {
     borderBottom: "none",
   },
   label: {
-    fontSize: 15,
+    fontSize: 16,
     letterSpacing: "1.5px",
     textTransform: "uppercase",
     color: ORANGE,
     marginBottom: 10,
-    fontWeight: 500,
+    fontWeight: 600,
   },
   title: {
     fontSize: 28,

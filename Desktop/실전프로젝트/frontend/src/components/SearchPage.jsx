@@ -208,9 +208,10 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
         <div style={styles.caseListCol}>
           <div style={styles.card}>
             <p style={styles.cardLabel}>
-              {result ? "유사 케이스 추천 " : "추천 케이스 TOP5"}
+              {result ? "유사 케이스 추천 " : "추천 케이스 TOP 5"}
               {result && <span style={{ color: "#E86F00" }}>5</span>}
             </p>
+            <hr style={{ border: "none", borderTop: "2px solid #E86F00", margin: "0 0 12px 0" }} />
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {cases.map((c) => (
                 <CaseItem
@@ -289,6 +290,21 @@ function TagSection({ label, tags, color }) {
 }
 
 function CaseItem({ item, isSelected, onClick }) {
+  const [bookmarked, setBookmarked] = useState(
+    JSON.parse(localStorage.getItem("bookmarks") || "[]").some((b) => b.rank === item.rank)
+  );
+
+  const toggleBookmark = (e) => {
+    e.stopPropagation();
+    const prev = JSON.parse(localStorage.getItem("bookmarks") || "[]");
+    const updated = bookmarked
+      ? prev.filter((b) => b.rank !== item.rank)
+      : [...prev, item];
+    localStorage.setItem("bookmarks", JSON.stringify(updated));
+    setBookmarked(!bookmarked);
+    window.dispatchEvent(new Event("bookmarkUpdated"));
+  };
+
   return (
     <div style={{ ...styles.caseItem, borderColor: isSelected ? "#E86F00" : "#e8e8e8", background: isSelected ? "#FEF0E9" : "#fff" }} onClick={onClick}>
       <div style={{ ...styles.caseRank, color: item.rank <= 3 ? "#E86F00" : "#aaaaaa" }}>{item.rank}</div>
@@ -300,6 +316,11 @@ function CaseItem({ item, isSelected, onClick }) {
           <span style={{ ...styles.caseTag, background: isSelected ? "#FAD5C3" : "#f0f0f0", color: isSelected ? "#E86F00" : "#555" }}>{item.industry}</span>
         </div>
       </div>
+      <button style={{ background: "none", border: "none", cursor: "pointer", padding: 4, flexShrink: 0 }} onClick={toggleBookmark}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill={bookmarked ? "#E86F00" : "none"} stroke="#E86F00" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+        </svg>
+      </button>
     </div>
   );
 }
@@ -402,7 +423,7 @@ function CompareSidebar({ cases, onRemove, onClose }) {
 const styles = {
   page: { width: 1000, margin: "0 auto", padding: "2.5rem 2rem 0", fontFamily: "'Pretendard', 'Apple SD Gothic Neo', sans-serif", boxSizing: "border-box" },
   splitRow: { display: "flex", gap: 16, alignItems: "flex-start", maxWidth: 1400, margin: "0 auto", padding: "0 2rem 2rem" },
-  caseListCol: { width: 420, flexShrink: 0 },
+  caseListCol: { width: 420, flexShrink: 0, borderRight: "1px solid #e0e0e0", paddingRight: 16 },
   mapCol: { flex: 1, minWidth: 0 },
   logoArea: { marginBottom: "2.5rem" },
   logoTitle: { fontSize: 32, fontWeight: 500, lineHeight: 1.4, color: "#1a1a1a" },
@@ -422,12 +443,12 @@ const styles = {
   dot: { width: 6, height: 6, borderRadius: "50%", background: "#E86F00", animation: "pulse 1.2s ease-in-out infinite" },
   errorText: { fontSize: 14, color: "#A32D2D", padding: "0.5rem 0" },
   card: { background: "#fff", border: "0.5px solid #fff", borderRadius: 12, padding: "1rem 1.25rem", marginBottom: 12 },
-  cardLabel: { fontSize: 21, letterSpacing: "0.1em", textTransform: "uppercase", color: "#999", marginBottom: 10, textAlign: "left" },
+  cardLabel: { fontSize: 21, fontWeight: 700,letterSpacing: "0.1em", textTransform: "uppercase", color: "#1a1a1a", marginBottom: 10, textAlign: "left" },
   problemSummary: { fontSize: 14, color: "#1a1a1a", lineHeight: 1.7, marginBottom: 10 },
   divider: { border: "none", borderTop: "0.5px solid #e8e8e8", margin: "10px 0" },
   tagSectionLabel: { fontSize: 11, color: "#999", marginBottom: 5 },
   tag: { padding: "4px 10px", fontSize: 12, borderRadius: 2 },
-  caseItem: { display: "flex", alignItems: "flex-start", gap: 14, padding: "14px 12px", border: "0.5px solid #e8e8e8", borderRadius: 2, cursor: "pointer" },
+  caseItem: { display: "flex", alignItems: "flex-start", gap: 14, padding: "14px 12px", border: "none", borderBottom: "1px solid #f0f0f0", borderRadius: 0, cursor: "pointer" },
   caseRank: { width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 700, flexShrink: 0, color: "#1a1a1a" },
   caseTitle: { fontSize: 16, fontWeight: 500, color: "#1a1a1a", marginBottom: 3 },
   caseMeta: { fontSize: 14, color: "#999" },

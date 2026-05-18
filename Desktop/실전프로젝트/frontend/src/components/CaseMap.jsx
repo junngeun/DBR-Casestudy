@@ -385,7 +385,7 @@ const styles = {
     gap: 12,
   },
   headerLabel: { fontSize: 15, letterSpacing: "0.1em", textTransform: "uppercase", color: "#999", marginBottom: 2 },
-  headerTitle: { fontSize: 25, fontWeight: 500, color: "#1a1a1a" },
+  headerTitle: { fontSize: 25, fontWeight: 600, color: "#1a1a1a" },
   legend: { display: "flex", flexWrap: "wrap", gap: "6px 14px", maxWidth: 460 },
   legendItem: { display: "flex", alignItems: "center", gap: 5 },
   legendDot: { width: 8, height: 8, borderRadius: "50%", opacity: 0.85 },

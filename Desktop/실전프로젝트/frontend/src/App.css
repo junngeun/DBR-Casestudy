@@ -1,3 +1,8 @@
+input::placeholder {
+  color: #d0d0d0 !important;
+  font-weight: 300;
+}
+
 .counter {
   font-size: 16px;
   padding: 5px 10px;
