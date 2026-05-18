@@ -305,13 +305,13 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
               style={styles.btnBrowseAll} 
               onClick={() => setShowAllList(true)}
             >
-              DBR 전체 케이스 120개 펼쳐보기 ↓
+              DBR 전체 케이스 120개 펼쳐보기
             </button>
           </div>
         ) : (
           <div style={styles.allListWrapper}>
             <div style={styles.allListHeader}>
-              <h2 style={styles.allListTitle}>DBR 전체 케이스 아카이브 (총 120개)</h2>
+              <h2 style={styles.allListTitle}>DBR 전체 케이스 아카이브</h2>
               <button style={styles.btnCloseAll} onClick={() => { setShowAllList(false); setVisibleCount(10); }}>접기 ✕</button>
             </div>
             
@@ -663,7 +663,7 @@ chip: { padding: "7px 18px", fontSize: 15, fontWeight: 500, color: "#666", backg
 
   bottomBrowseSection: { width: 1000, margin: "0 auto 5rem", padding: "0 2rem", boxSizing: "border-box" },
   btnBrowseAll: { width: "100%", padding: "14px", fontSize: 16, fontWeight: 600, color: "#E86F00", background: "#FEF0E0", border: "1px dashed #E86F00", borderRadius: 8, cursor: "pointer", transition: "all 0.2s" },
-  allListWrapper: { background: "#fff", border: "1px solid #ede8e2", borderRadius: 12, padding: 24, marginTop: 10 },
+  allListWrapper: { background: "#fff", border: "1px solid #ede8e2", borderRadius: 2, padding: 24, marginTop: 10 },
   allListHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
   allListTitle: { fontSize: 18, fontWeight: 700, color: "#1a1a1a", margin: 0 },
   btnCloseAll: { background: "none", border: "none", fontSize: 14, color: "#888", cursor: "pointer", fontWeight: 500 },
@@ -676,7 +676,7 @@ chip: { padding: "7px 18px", fontSize: 15, fontWeight: 500, color: "#666", backg
   archiveTitle: { fontSize: 15, fontWeight: 600, color: "#1a1a1a", marginBottom: 4 },
   archiveCompany: { fontSize: 13, color: "#666", marginBottom: 8 },
   archiveSummary: { fontSize: 13, color: "#666", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
-  btnLoadMore: { padding: "12px 30px", fontSize: 14, fontWeight: 600, color: "#fff", background: "#1a1a1a", border: "none", borderRadius: 6, cursor: "pointer", transition: "background 0.2s" },
+  btnLoadMore: { padding: "12px 30px", fontSize: 14, fontWeight: 600, color: "#fff", background: "#1a1a1a", border: "none", borderRadius: 2, cursor: "pointer", transition: "background 0.2s" },
 
   // 💡 여백이 추가된 panel 스타일 부분
   panel: { position: "fixed", top: 0, right: 0, width: 400, height: "100vh", background: "#fff", borderLeft: "1px solid #e8e8e8", padding: "1.5rem", paddingBottom: 100, overflowY: "auto", zIndex: 200, boxSizing: "border-box", boxShadow: "-4px 0 20px rgba(0,0,0,0.08)", display: "flex", flexDirection: "column" },

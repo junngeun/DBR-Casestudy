@@ -15,7 +15,7 @@ function App() {
     <div>
       <header style={{
         display: "flex", alignItems: "center",
-        padding: "0 32px 0 490px", height: 72, borderBottom: "1px solid #e8e8e8",
+        padding: "0 32px 0 240px", height: 72, borderBottom: "1px solid #e8e8e8",
         background: "#fff", position: "sticky", top: 0, zIndex: 100,
         boxSizing: "border-box",
       }}>
