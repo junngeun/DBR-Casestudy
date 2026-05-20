@@ -47,6 +47,9 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
   
   const [allCases, setAllCases] = useState([]);
   const [caseLoadError, setCaseLoadError] = useState(null);
+  const [popularCases, setPopularCases] = useState([]);
+  const [popularLoading, setPopularLoading] = useState(false);
+  const [popularError, setPopularError] = useState(null);
 
   const [selectedIndustry, setSelectedIndustry] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null);
@@ -126,6 +129,64 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
     };
 
     fetchCases();
+  }, []);
+
+  useEffect(() => {
+    const fetchPopularCases = async () => {
+      setPopularLoading(true);
+      setPopularError(null);
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/popular/cases?limit=5&days=7`);
+
+        if (!res.ok) {
+          throw new Error("인기 케이스를 불러오지 못했습니다.");
+        }
+
+        const json = await res.json();
+
+        if (!json.success || !Array.isArray(json.data)) {
+          throw new Error("인기 케이스 데이터 형식이 올바르지 않습니다.");
+        }
+
+        const mappedPopularCases = json.data.map((item, index) => ({
+          id: item.case_idx,
+          rank: index + 1,
+          case_idx: item.case_idx,
+          title: item.title,
+          company: item.comp_name,
+          industry: item.industry,
+          date: item.pub_year ? `${item.pub_year}년` : "",
+          summary: item.summary,
+          view_count: item.view_count,
+
+          chapter_title: item.chapter_title,
+          src_url: item.src_url,
+          issue_no: item.issue_no,
+          pub_year: item.pub_year,
+          comp_name: item.comp_name,
+          comp_size: item.comp_size,
+          prob_main: item.prob_main,
+          prob_keyword: item.prob_keyword,
+          prob_def: item.prob_def,
+          sol_type: item.sol_type,
+          sol_detail: item.sol_detail,
+          perf_type: item.perf_type,
+          perf_dir: item.perf_dir,
+          x: item.x,
+          y: item.y,
+        }));
+
+        setPopularCases(mappedPopularCases);
+      } catch (error) {
+        console.error("인기 케이스 로딩 실패:", error);
+        setPopularError(error.message);
+      } finally {
+        setPopularLoading(false);
+      }
+    };
+
+    fetchPopularCases();
   }, []);
 
   const handleSearch = async () => {
@@ -300,9 +361,41 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
     };
   });
 
+  const saveCaseViewLog = async (caseData, viewSource = "unknown") => {
+    const caseIdx = caseData?.case_idx || caseData?.id;
+
+    if (!caseIdx) return;
+
+    try {
+      const token = localStorage.getItem("token");
+
+      await fetch(`${API_BASE_URL}/api/logs/view`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          case_idx: caseIdx,
+          query_idx: null,
+          view_source: viewSource,
+        }),
+      });
+    } catch (error) {
+      console.error("케이스 조회 로그 저장 실패:", error);
+    }
+  };
+
+  const handleCaseSelect = (caseData, viewSource = "unknown") => {
+    setSelectedCase(caseData);
+    saveCaseViewLog(caseData, viewSource);
+  };
+
   return (
     <>
-      <div style={styles.page}>
+      <div style={styles.topSearchLayout}>
+        <div style={styles.searchMainCol}>
+          <div style={styles.page}>
         <div style={styles.logoArea}>
           <h1 style={styles.logoTitle}>
             어떤 비즈니스 문제를{" "}
@@ -374,19 +467,37 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
         </div>
 
         <div style={{ marginTop: 20 }}>
-          <textarea
-            style={{
-              ...styles.textarea,
-              background: textareaFocused ? "#fff" : "#f5f5f5",
-              border: textareaFocused ? "1.5px solid #E86F00" : "1px solid #e0e0e0",
-            }}
-            placeholder="비즈니스 고민을 자유롭게 입력해주세요."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onFocus={() => setTextareaFocused(true)}
-            onBlur={() => { if (!query.trim()) setTextareaFocused(false); }}
-            onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSearch(); }}
-          />
+          <div style={styles.inputPanel}>
+            <textarea
+              style={{
+                ...styles.textarea,
+                background: "#fff",
+                border: "none",
+                borderBottom: "none",
+                borderRadius: 0,
+              }}
+              placeholder="비즈니스 고민을 자유롭게 입력해주세요."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onFocus={() => setTextareaFocused(true)}
+              onBlur={() => { if (!query.trim()) setTextareaFocused(false); }}
+              onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSearch(); }}
+            />
+
+            <div style={styles.exampleAreaInInput}>
+              <p style={styles.chipsLabel}>EX)</p>
+              <div style={{ display: "flex", gap: 6, justifyContent: "center", marginBottom: 6, flexWrap: "wrap" }}>
+                <span style={styles.exampleChip}>조직 내 실행력이 너무 떨어지는데 어떻게 개선할 수 있을까요</span>
+                <span style={styles.exampleChip}>신사업을 시작하려는데 어느 시장부터 진입해야 할지 모르겠어요</span>
+              </div>
+              <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap" }}>
+                <span style={styles.exampleChip}>매출은 나오는데 수익성이 계속 악화되고 있어요</span>
+                <span style={styles.exampleChip}>브랜드 인지도는 높은데 구매 전환이 안 돼요</span>
+                <span style={styles.exampleChip}>고객 이탈률이 높아지고 있는데 원인을 모르겠어요</span>
+              </div>
+            </div>
+          </div>
+
           <div style={styles.btnRow}>
             <button
               style={{ ...styles.btnClear, background: clearBtnHover ? "#e8e8e8" : "transparent", opacity: isSearchDisabled ? 0.5 : 1, cursor: isSearchDisabled ? "not-allowed" : "pointer" }}
@@ -405,27 +516,24 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
           </div>
         </div>
 
-        <div style={styles.exampleArea}>
-          <p style={styles.chipsLabel}>예시 고민</p>
-          <div style={{ display: "flex", gap: 6, justifyContent: "center", marginBottom: 6 }}>
-            <span style={styles.exampleChip}>조직 내 실행력이 너무 떨어지는데 어떻게 개선할 수 있을까요</span>
-            <span style={styles.exampleChip}>신사업을 시작하려는데 어느 시장부터 진입해야 할지 모르겠어요</span>
-          </div>
-          <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
-            <span style={styles.exampleChip}>매출은 나오는데 수익성이 계속 악화되고 있어요</span>
-            <span style={styles.exampleChip}>브랜드 인지도는 높은데 구매 전환이 안 돼요</span>
-            <span style={styles.exampleChip}>고객 이탈률이 높아지고 있는데 원인을 모르겠어요</span>
-          </div>
-        </div>
-
         {loading && (
-          <div style={styles.loadingRow}>
-            <LoadingDots />
-            <span style={styles.loadingText}>문제 분석 및 케이스 매칭 중...</span>
+          <div style={styles.loadingStatusArea}>
+            <span style={styles.loadingStatusText}>문제 분석 및 케이스 매칭 중<LoadingEllipsis /></span>
           </div>
         )}
         {error && <p style={styles.errorText}>{error}</p>}
         {caseLoadError && <p style={styles.errorText}>{caseLoadError}</p>}
+          </div>
+        </div>
+
+        <div style={styles.popularSideCol}>
+          <PopularCaseBox
+            cases={popularCases}
+            loading={popularLoading}
+            error={popularError}
+            onCaseClick={(caseData) => handleCaseSelect(caseData, "archive")}
+          />
+        </div>
       </div>
 
       <div style={styles.splitRow}>
@@ -476,7 +584,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
                   item={c}
                   isSelected={!!selectedCases.find((s) => s.title === c.title)}
                   isViewing={selectedCase?.title === c.title}
-                  onClick={() => setSelectedCase(c)} 
+                  onClick={() => handleCaseSelect(c, result ? "recommend" : "archive")} 
                 />
               ))}
             </div>
@@ -486,7 +594,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
           <CaseMap
             cases={mapCases}
             highlightedIds={recommendedCaseIds}
-            onCaseClick={setSelectedCase}
+            onCaseClick={(caseData) => handleCaseSelect(caseData, "map")}
           />
         </div>
       </div>
@@ -521,7 +629,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
                     borderLeft: selectedCase?.title === c.title ? "3px solid #E86F00" : "3px solid transparent",
                     background: selectedCases.find((s) => s.title === c.title) ? "#FEF0E9" : "#fff"
                   }}
-                  onClick={() => setSelectedCase(c)}
+                  onClick={() => handleCaseSelect(c, "archive")}
                 >
                   <div style={styles.archiveHeader}>
                     <span style={styles.archiveIndustry}>{c.industry}</span>
@@ -605,6 +713,58 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
   );
 }
 
+function PopularCaseBox({ cases, loading, error, onCaseClick }) {
+  return (
+    <div style={styles.popularBox}>
+      <div style={styles.popularHeader}>
+        <div>
+          <p style={styles.popularEyebrow}>실시간 탐색 데이터</p>
+          <h3 style={styles.popularTitle}>많이 조회된 케이스</h3>
+        </div>
+        <span style={styles.popularBadge}>TOP 5</span>
+      </div>
+
+      {loading && (
+        <p style={styles.popularMessage}>인기 케이스를 불러오는 중...</p>
+      )}
+
+      {error && (
+        <p style={styles.popularMessage}>{error}</p>
+      )}
+
+      {!loading && !error && cases.length === 0 && (
+        <p style={styles.popularMessage}>
+          아직 충분한 조회 데이터가 없어 케이스를 클릭하면 순위가 쌓입니다.
+        </p>
+      )}
+
+      {!loading && !error && cases.length > 0 && (
+        <div style={styles.popularList}>
+          {cases.map((item, index) => (
+            <div
+              key={item.case_idx || item.id}
+              style={styles.popularItem}
+              onClick={() => onCaseClick(item)}
+            >
+              <div style={styles.popularRank}>{index + 1}</div>
+
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={styles.popularMeta}>
+                  <span>{item.industry || "산업 미분류"}</span>
+                  {/* <span>·</span>
+                  <span>조회 {item.view_count || 0}</span> */}
+                </div>
+                <p style={styles.popularItemTitle}>{item.title}</p>
+                <p style={styles.popularCompany}>{item.company}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function getFilteredCases(cases, filters) {
   const { selectedIndustry, selectedCategory, selectedKeyword, query } = filters;
 
@@ -674,6 +834,20 @@ function LoadingDots() {
       ))}
     </div>
   );
+}
+
+function LoadingEllipsis() {
+  const [dots, setDots] = useState(".");
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setDots((prev) => (prev.length >= 3 ? "." : `${prev}.`));
+    }, 400);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  return <span style={styles.loadingEllipsis}>{dots}</span>;
 }
 
 function TagSection({ label, tags, color }) {
@@ -919,7 +1093,10 @@ function CompareSidebar({ cases, onRemove, onClose }) {
 }
 
 const styles = {
-  page: { width: 1000, margin: "0 auto", padding: "2.5rem 2rem 0", fontFamily: "'Pretendard', 'Apple SD Gothic Neo', sans-serif", boxSizing: "border-box" },
+  topSearchLayout: { maxWidth: 1400, margin: "0 auto", padding: "2.5rem 2rem 0", display: "grid", gridTemplateColumns: "minmax(0, 1fr) 340px", gap: 24, alignItems: "start", boxSizing: "border-box" },
+  searchMainCol: { minWidth: 0 },
+  popularSideCol: { position: "sticky", top: 96 },
+  page: { width: "100%", margin: "0 auto", padding: 0, fontFamily: "'Pretendard', 'Apple SD Gothic Neo', sans-serif", boxSizing: "border-box" },
   splitRow: { display: "flex", gap: 16, alignItems: "flex-start", maxWidth: 1400, margin: "0 auto", padding: "0 2rem 2rem" },
   caseListCol: { width: 420, flexShrink: 0, borderRight: "1px solid #e0e0e0", paddingRight: 16 },
   mapCol: { flex: 1, minWidth: 0 },
@@ -936,16 +1113,34 @@ const styles = {
   chipActiveNone: { padding: "7px 18px", fontSize: 15, fontWeight: 600, color: "#fff", background: "#666", border: "1px solid #666", borderRadius: 20, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 6px rgba(0, 0, 0, 0.15)" },
 
   textarea: { width: "100%", minHeight: 100, padding: "14px 16px", fontSize: 16, fontFamily: "inherit", color: "#1a1a1a", background: "#f5f5f5", border: "1px solid #e0e0e0", borderRadius: 2, lineHeight: 1.6, outline: "none", boxSizing: "border-box", resize: "none", maxHeight: 180 },
-  btnRow: { display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12, marginBottom: "2rem" },
+  btnRow: { display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12, marginBottom: "0.8rem" },
   btnClear: { padding: "8px 16px", fontSize: 15, color: "#666", background: "transparent", border: "1px solid #e0e0e0", borderRadius: 2, cursor: "pointer", fontFamily: "inherit" },
   btnSearch: { padding: "8px 20px", fontSize: 15, fontWeight: 500, color: "#fff", background: "#E86F00", border: "none", borderRadius: 2, fontFamily: "inherit" },
   exampleArea: { marginBottom: "1.5rem" },
-  chipsLabel: { fontSize: 17, color: "#999", marginBottom: 8, textAlign: "center" },
-  exampleChip: { padding: "5px 12px", fontSize: 15, color: "#E86F00", background: "#fef0e9", border: "none", borderRadius: 20, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" },
+  chipsLabel: { fontSize: 13, color: "#999", marginBottom: 6, textAlign: "center" },
+  exampleChip: { padding: "4px 10px", fontSize: 13, color: "#E86F00", background: "#fef0e9", border: "none", borderRadius: 20, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" },
   loadingRow: { display: "flex", alignItems: "center", gap: 8, padding: "1rem 0" },
   loadingText: { fontSize: 14, color: "#999" },
   dot: { width: 6, height: 6, borderRadius: "50%", background: "#E86F00", animation: "pulse 1.2s ease-in-out infinite" },
   errorText: { fontSize: 14, color: "#A32D2D", padding: "0.5rem 0" },
+  inputPanel: { background: "#fff", border: "1.5px solid #E86F00", borderRadius: 2, overflow: "hidden", boxSizing: "border-box" },
+  exampleAreaInInput: { padding: "8px 14px 10px", background: "#fff", border: "none", borderTop: "1px solid #F4C28A", boxSizing: "border-box" },
+  loadingStatusArea: { minHeight: 44, display: "flex", alignItems: "center", justifyContent: "flex-start", padding: "0.2rem 0 1rem", marginTop: "-0.2rem" },
+  loadingStatusText: { fontSize: 17, fontWeight: 600, color: "#E86F00", letterSpacing: "-0.01em" },
+  loadingEllipsis: { display: "inline-block", width: 28, textAlign: "left" },
+
+  popularBox: { background: "#fff", border: "1px solid #ede8e2", borderRadius: 12, padding: "18px", boxShadow: "0 2px 10px rgba(0,0,0,0.03)" },
+  popularHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 },
+  popularEyebrow: { fontSize: 12, color: "#999", margin: 0, marginBottom: 4 },
+  popularTitle: { fontSize: 20, fontWeight: 800, color: "#1a1a1a", margin: 0 },
+  popularBadge: { fontSize: 12, fontWeight: 700, color: "#E86F00", background: "#FEF0E9", borderRadius: 20, padding: "5px 9px" },
+  popularMessage: { fontSize: 14, color: "#777", lineHeight: 1.5, padding: "14px 0", margin: 0 },
+  popularList: { display: "flex", flexDirection: "column", gap: 8 },
+  popularItem: { display: "flex", gap: 12, padding: "12px 10px", borderRadius: 8, cursor: "pointer", border: "1px solid #f0f0f0", transition: "all 0.2s", background: "#fff" },
+  popularRank: { width: 26, height: 26, borderRadius: "50%", background: "#E86F00", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, flexShrink: 0 },
+  popularMeta: { display: "flex", gap: 5, fontSize: 12, color: "#E86F00", fontWeight: 600, marginBottom: 4 },
+  popularItemTitle: { fontSize: 14, fontWeight: 700, color: "#1a1a1a", lineHeight: 1.4, margin: 0, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
+  popularCompany: { fontSize: 12, color: "#999", marginTop: 5 },
 
   recommendStatusBox: {
     background: "#FEF0E0",

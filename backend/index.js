@@ -5,6 +5,9 @@ const casesRouter = require("./routes/cases");
 
 const { router: authRouter } = require("./routes/auth");
 
+const logsRouter = require("./routes/logs");
+const popularRouter = require("./routes/popular");
+
 require("dotenv").config();
 
 const app = express();
@@ -19,6 +22,9 @@ app.use(express.json());
 app.use("/api/cases", casesRouter);
 
 app.use("/api/auth", authRouter);
+
+app.use("/api/logs", logsRouter);
+app.use("/api/popular", popularRouter);
 
 app.get("/", (req, res) => {
   res.send("Backend server is running");
