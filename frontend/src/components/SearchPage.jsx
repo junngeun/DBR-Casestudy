@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import CaseMap from "./CaseMap";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
+const AI_API_BASE_URL = import.meta.env.VITE_AI_API_BASE_URL || "http://localhost:8000";
 
 const INDUSTRIES = ["IT·플랫폼", "커머스", "리테일", "식음료", "금융", "물류·운송", "제조", "콘텐츠·미디어", "헬스케어", "부동산·공간", "기타"];
 const CATEGORIES = ["고객", "성장", "혁신", "효율"];
@@ -104,57 +105,122 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
 
   const handleSearch = async () => {
     const filters = [selectedIndustry, selectedCategory, selectedKeyword]
-      .filter(val => val && val !== "상관없음") 
+      .filter((val) => val && val !== "상관없음")
       .join(", ");
-    
+
     if (!query.trim() && !filters) return;
-    
-    const searchQuery = query.trim() ? `[필터조건: ${filters}] ${query.trim()}` : filters;
-    
+
+    const searchQuery = query.trim()
+      ? filters
+        ? `[필터조건: ${filters}] ${query.trim()}`
+        : query.trim()
+      : filters;
+
     setLoading(true);
     setResult(null);
     setError(null);
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500)); 
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const requestBody = {
+        query: String(searchQuery || "").trim(),
+        top_k: 80,
+        rerank_k: 20,
+        final_k: 5,
+      };
+
+      const res = await fetch(`${AI_API_BASE_URL}/recommend`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1500,
-          system: SYSTEM_PROMPT,
-          messages: [{ role: "user", content: searchQuery }],
-        }),
-      });
-      
-      if (!res.ok) throw new Error("API 연동 필요");
-      const data = await res.json();
-      const text = data.content.map((i) => i.text || "").join("");
-      const clean = text.replace(/```json|```/g, "").trim();
-      const parsed = JSON.parse(clean);
-      setResult(parsed);
-      
-    } catch (e) {
-      const filteredCases = getFilteredCases(allCases, {
-        selectedIndustry,
-        selectedCategory,
-        selectedKeyword,
-        query,
+        body: JSON.stringify(requestBody),
       });
 
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null);
+        console.error("추천 API 오류 상세:", errorData);
+        throw new Error(errorData?.detail || "추천 API 호출에 실패했습니다.");
+      }
+
+      const data = await res.json();
+
+      const queryMeta = data.query_meta || {};
+      const resultStatus = data.result_status || {};
+      const recommendations = data.recommendations || [];
+
+      const mappedCases = recommendations.map((item, index) => ({
+        id: item.case_idx,
+        rank: item.ranking || index + 1,
+        case_idx: item.case_idx,
+        title: item.title,
+        company: item.comp_name,
+        industry: item.industry,
+        date: item.pub_year ? `${item.pub_year}년` : "",
+        tags: [item.prob_main, item.prob_keyword, item.sol_type].filter(Boolean),
+        summary: item.summary,
+        similarity: item.final_score != null
+          ? Math.round(Number(item.final_score) * 100)
+          : null,
+        isRecommended: true,
+
+        chapter_title: item.chapter_title,
+        src_url: item.src_url,
+        issue_no: item.issue_no,
+        pub_year: item.pub_year,
+        comp_name: item.comp_name,
+        comp_size: item.comp_size,
+        prob_main: item.prob_main,
+        prob_keyword: item.prob_keyword,
+        prob_def: item.prob_def,
+        sol_type: item.sol_type,
+        sol_detail: item.sol_detail,
+        perf_type: item.perf_type,
+        perf_dir: item.perf_dir,
+        x: item.x,
+        y: item.y,
+
+        meta_sim: item.meta_sim,
+        summary_sim: item.summary_sim,
+        metadata_bonus: item.metadata_bonus,
+        base_score: item.base_score,
+        gpt_relevance_score: item.gpt_relevance_score,
+        condition_match: item.condition_match,
+        raw_final_score: item.raw_final_score,
+        final_score: item.final_score,
+        reco_reason: item.reco_reason,
+        reason_check: item.reason_check,
+      }));
+
       setResult({
-        problem_summary: "선택하신 조건과 입력하신 고민을 분석한 결과, 입력 조건과 유사한 문제 유형 및 해결 전략을 가진 DBR 케이스를 우선 탐색했습니다.",
-        problem_types: [selectedCategory || "문제 유형", selectedKeyword || "핵심 키워드"].filter(Boolean),
-        kpis: ["성과 개선", "고객 반응", "운영 효율"],
-        causes: ["시장 변화", "고객 니즈 변화", "실행 전략 차이"],
-        cases: filteredCases.slice(0, 5).map((c, index) => ({
-          ...c,
-          rank: index + 1,
-          similarity: Math.floor(Math.random() * (95 - 75) + 75),
-          isRecommended: true,
-        }))
+        problem_summary:
+          resultStatus.message ||
+          queryMeta.expected_cause ||
+          "입력하신 고민을 바탕으로 유사한 DBR 케이스를 추천했습니다.",
+
+        problem_types: [
+          queryMeta.prob_main,
+          ...(Array.isArray(queryMeta.prob_keyword) ? queryMeta.prob_keyword : []),
+        ].filter(Boolean),
+
+        kpis: [
+          queryMeta.perf_type,
+          queryMeta.sol_type,
+        ].filter(Boolean),
+
+        causes: [
+          queryMeta.expected_cause,
+          ...(Array.isArray(queryMeta.must_have) ? queryMeta.must_have : []),
+        ].filter(Boolean),
+
+        query_meta: queryMeta,
+        result_status: resultStatus,
+        cases: mappedCases,
       });
+
+      if (onSearch) {
+        onSearch(mappedCases);
+      }
+    } catch (e) {
+      console.error("추천 API 호출 실패:", e);
+      setError(e.message || "추천 결과를 불러오는 중 오류가 발생했습니다.");
     } finally {
       setLoading(false);
       setHasSearched(true);
@@ -378,7 +444,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
         </div>
         <div style={styles.mapCol}>
           <CaseMap
-            cases={searchedCases.length > 0 ? searchedCases : mapCases}
+            cases={mapCases}
             highlightedIds={recommendedCaseIds}
             onCaseClick={setSelectedCase}
           />

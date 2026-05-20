@@ -138,7 +138,7 @@ export default function CaseMap({
       top: 28,
       right: 28,
       bottom: 58,
-      left: 110,
+      left: 120,
     };
 
     const innerW = width - margin.left - margin.right;
