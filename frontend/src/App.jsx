@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import LoginPage from './components/LoginPage'
 import SignupPage from './components/SignupPage'
 import LandingPage from './components/LandingPage'
@@ -6,10 +6,69 @@ import AboutPage from './components/AboutPage'
 import SearchPage from './components/SearchPage'
 import BookmarkPage from './components/BookmarkPage'
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
 
 function App() {
   const [page, setPage] = useState("landing");
   const [searchedCases, setSearchedCases] = useState([]);
+  const [member, setMember] = useState(null);
+
+  useEffect(() => {
+    const savedToken = localStorage.getItem("token");
+    const savedMember = localStorage.getItem("member");
+
+    if (savedMember) {
+      try {
+        setMember(JSON.parse(savedMember));
+      } catch (error) {
+        localStorage.removeItem("member");
+      }
+    }
+
+    if (!savedToken) return;
+
+    const checkLogin = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${savedToken}`,
+          },
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          localStorage.removeItem("token");
+          localStorage.removeItem("member");
+          setMember(null);
+          return;
+        }
+
+        localStorage.setItem("member", JSON.stringify(data.member));
+        setMember(data.member);
+      } catch (error) {
+        console.error("로그인 유지 확인 실패:", error);
+        localStorage.removeItem("token");
+        localStorage.removeItem("member");
+        setMember(null);
+      }
+    };
+
+    checkLogin();
+  }, []);
+
+  const handleAuthSuccess = (loginMember) => {
+    setMember(loginMember);
+    setPage("search");
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("member");
+    setMember(null);
+    setPage("landing");
+  };
 
   return (
     <div>
@@ -39,34 +98,70 @@ function App() {
               <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
             </svg>
           </button>
-          <button
-            style={{ padding: "8px 16px", fontSize: 14, color: "#666", background: "transparent", border: "1px solid #e0e0e0", borderRadius: 2, cursor: "pointer", fontFamily: "inherit" }}
-            onClick={() => setPage("login")}
-          >로그인</button>
-          <button
-            style={{ padding: "8px 16px", fontSize: 14, color: "#fff", background: "#E86F00", border: "none", borderRadius: 2, cursor: "pointer", fontFamily: "inherit", fontWeight: 500 }}
-            onClick={() => setPage("signup")}
-          >회원가입</button>
+
+          {member ? (
+            <>
+              <span style={{ fontSize: 14, color: "#666", marginRight: 6 }}>
+                {member.nickname || member.email}님
+              </span>
+              <button
+                style={{ padding: "8px 16px", fontSize: 14, color: "#666", background: "transparent", border: "1px solid #e0e0e0", borderRadius: 2, cursor: "pointer", fontFamily: "inherit" }}
+                onClick={handleLogout}
+              >
+                로그아웃
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                style={{ padding: "8px 16px", fontSize: 14, color: "#666", background: "transparent", border: "1px solid #e0e0e0", borderRadius: 2, cursor: "pointer", fontFamily: "inherit" }}
+                onClick={() => setPage("login")}
+              >
+                로그인
+              </button>
+              <button
+                style={{ padding: "8px 16px", fontSize: 14, color: "#fff", background: "#E86F00", border: "none", borderRadius: 2, cursor: "pointer", fontFamily: "inherit", fontWeight: 500 }}
+                onClick={() => setPage("signup")}
+              >
+                회원가입
+              </button>
+            </>
+          )}
         </div>
       </header>
 
-      {page === "login" && <LoginPage onSignup={() => setPage("signup")} onSuccess={() => setPage("search")} />}
-      {page === "signup" && <SignupPage onLogin={() => setPage("login")} onSuccess={() => setPage("search")} />}
+      {page === "login" && (
+        <LoginPage
+          onSignup={() => setPage("signup")}
+          onSuccess={handleAuthSuccess}
+        />
+      )}
+
+      {page === "signup" && (
+        <SignupPage
+          onLogin={() => setPage("login")}
+          onSuccess={handleAuthSuccess}
+        />
+      )}
+
       {page === "landing" && (
         <LandingPage
           onStart={() => { document.body.style.overflow = ""; setPage("search"); }}
           onAbout={() => { document.body.style.overflow = ""; setPage("about"); }}
         />
       )}
+
       {page === "about" && (
         <AboutPage onStart={() => setPage("search")} />
       )}
+
       {page === "search" && (
         <SearchPage
           onSearch={(cases) => setSearchedCases(cases)}
           searchedCases={searchedCases}
         />
       )}
+
       {page === "bookmark" && <BookmarkPage onBack={() => setPage("search")} />}
     </div>
   );
