@@ -3,6 +3,8 @@ const cors = require("cors");
 
 const casesRouter = require("./routes/cases");
 
+const { router: authRouter } = require("./routes/auth");
+
 require("dotenv").config();
 
 const app = express();
@@ -15,6 +17,8 @@ app.use(cors({
 app.use(express.json());
 
 app.use("/api/cases", casesRouter);
+
+app.use("/api/auth", authRouter);
 
 app.get("/", (req, res) => {
   res.send("Backend server is running");

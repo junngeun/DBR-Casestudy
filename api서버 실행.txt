@@ -1,0 +1,3 @@
+conda activate dbr-ai
+cd C:\Users\smhrd\Desktop\실전프로젝트\DBR\ai-server
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
