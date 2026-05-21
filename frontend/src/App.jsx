@@ -12,6 +12,7 @@ function App() {
   const [page, setPage] = useState("landing");
   const [searchedCases, setSearchedCases] = useState([]);
   const [member, setMember] = useState(null);
+  const [bookmarkCount, setBookmarkCount] = useState(0);
 
   useEffect(() => {
     const savedToken = localStorage.getItem("token");
@@ -58,6 +59,28 @@ function App() {
     checkLogin();
   }, []);
 
+  useEffect(() => {
+    const updateBookmarkCount = () => {
+      try {
+        const bookmarks = JSON.parse(localStorage.getItem("bookmarks") || "[]");
+        setBookmarkCount(Array.isArray(bookmarks) ? bookmarks.length : 0);
+      } catch (error) {
+        console.error("북마크 개수 확인 실패:", error);
+        setBookmarkCount(0);
+      }
+    };
+
+    updateBookmarkCount();
+
+    window.addEventListener("bookmarkUpdated", updateBookmarkCount);
+    window.addEventListener("storage", updateBookmarkCount);
+
+    return () => {
+      window.removeEventListener("bookmarkUpdated", updateBookmarkCount);
+      window.removeEventListener("storage", updateBookmarkCount);
+    };
+  }, []);
+
   const handleAuthSuccess = (loginMember) => {
     setMember(loginMember);
     setPage("search");
@@ -91,12 +114,19 @@ function App() {
 
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
           <button
-            style={{ background: "#fff", border: "1px solid #e0e0e0", cursor: "pointer", padding: "8px", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", width: 36, height: 36 }}
+            style={styles.bookmarkHeaderBtn}
             onClick={() => setPage("bookmark")}
+            title="북마크"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
             </svg>
+
+            {bookmarkCount > 0 && (
+              <span style={styles.bookmarkCountBadge}>
+                {bookmarkCount > 99 ? "99+" : bookmarkCount}
+              </span>
+            )}
           </button>
 
           {member ? (
@@ -166,5 +196,41 @@ function App() {
     </div>
   );
 }
+
+const styles = {
+  bookmarkHeaderBtn: {
+    position: "relative",
+    background: "#fff",
+    border: "1px solid #e0e0e0",
+    cursor: "pointer",
+    padding: "8px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: "50%",
+    width: 36,
+    height: 36,
+  },
+
+  bookmarkCountBadge: {
+  position: "absolute",
+  top: -4,
+  right: -4,
+  minWidth: 15,
+  height: 15,
+  padding: "0 4px",
+  borderRadius: 999,
+  background: "#E86F00",
+  color: "#fff",
+  fontSize: 9,
+  fontWeight: 700,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  lineHeight: 1,
+  boxSizing: "border-box",
+  border: "1.5px solid #fff",
+  },
+};
 
 export default App;
