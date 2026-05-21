@@ -635,7 +635,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
                 >
                   <div style={styles.archiveHeader}>
                     <span style={styles.archiveIndustry}>{c.industry}</span>
-                    <span style={styles.archiveDate}>{c.date}</span>
+                    <span style={styles.archiveDate}>발행년도 : {c.date}</span>
                   </div>
                   <div style={styles.archiveTitle}>{c.title}</div>
                   <div style={styles.archiveCompany}>{c.company}</div>
