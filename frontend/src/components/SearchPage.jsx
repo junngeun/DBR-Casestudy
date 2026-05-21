@@ -475,11 +475,11 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
         </div>
 
         <div style={{ marginTop: 20 }}>
-          <div style={styles.inputPanel}>
+          <div style={{ ...styles.inputPanel, border: textareaFocused ? "1.5px solid #E86F00" : "1px solid #e0e0e0" }}>
             <textarea
               style={{
                 ...styles.textarea,
-                background: "#fff",
+                background: textareaFocused ? "#fff" : "#f5f5f5",
                 border: "none",
                 borderBottom: "none",
                 borderRadius: 0,
@@ -592,7 +592,9 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
                   item={c}
                   isSelected={!!selectedCases.find((s) => s.title === c.title)}
                   isViewing={selectedCase?.title === c.title}
-                  onClick={() => handleCaseSelect(c, result ? "recommend" : "archive")} 
+                  onClick={() => handleCaseSelect(c, result ? "recommend" : "archive")}
+                  onRemove={() => setSelectedCases(prev => prev.filter(s => s.title !== c.title))}
+                  onAdd={() => setSelectedCases(prev => prev.length < 3 ? [...prev, c] : prev)}
                 />
               ))}
             </div>
@@ -698,7 +700,11 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
                   <span style={{ fontSize: 13, fontWeight: 700, color: "#E86F00" }}>{i + 1}</span>
                   <span style={{ fontSize: 13, color: "#fff", flex: 1 }}>{c.title.length > 25 ? c.title.slice(0, 25) + "..." : c.title}</span>
                   <span style={{ fontSize: 12, color: "#999" }}>{c.company}</span>
-                </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setSelectedCases(prev => prev.filter(s => s.title !== c.title)); }}
+                    style={{ background: "none", border: "none", color: "#999", fontSize: 14, cursor: "pointer", padding: "0 0 0 8px", lineHeight: 1 }}
+                  >✕</button>
+                  </div>
               ))}
             </div>
           )}
@@ -878,7 +884,7 @@ function TagSection({ label, tags, color }) {
   );
 }
 
-function CaseItem({ item, isSelected, isViewing, onClick }) {
+function CaseItem({ item, isSelected, isViewing, onClick, onRemove, onAdd }) {
   const [bookmarked, setBookmarked] = useState(false);
 
   useEffect(() => {
@@ -923,6 +929,18 @@ function CaseItem({ item, isSelected, isViewing, onClick }) {
           <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
         </svg>
       </button>
+      {onRemove && (
+        <button
+          style={{
+            padding: "4px 8px", fontSize: 11, fontWeight: 600, border: "none", borderRadius: 2,
+            cursor: "pointer", fontFamily: "inherit", flexShrink: 0, transition: "all 0.2s",
+            color: "#fff", background: isSelected ? "#1a1a1a" : "#E86F00",
+          }}
+          onClick={(e) => { e.stopPropagation(); isSelected ? onRemove() : onAdd?.(); }}
+        >
+          {isSelected ? "제거" : "추가"}
+        </button>
+      )}
     </div>
   );
 }
@@ -983,6 +1001,20 @@ function CasePanel({ caseData, selectedCases, isSelected, onToggleSelect, onClos
         {caseData.prob_main && <><span style={{ fontSize: 14, fontWeight: 600, color: "#E86F00" }}>|</span><span style={{ fontSize: 14, fontWeight: 600, color: "#E86F00" }}>{caseData.prob_main}</span></>}
         {caseData.sol_type && <><span style={{ fontSize: 14, fontWeight: 600, color: "#E86F00" }}>|</span><span style={{ fontSize: 14, fontWeight: 600, color: "#E86F00" }}>{caseData.sol_type}</span></>}
       </div>
+      <button
+        style={{ 
+          width: "100%", padding: "12px", fontSize: 14, fontWeight: 600, 
+          color: "#fff", background: isSelected ? "#1a1a1a" : selectedCases.length >= 3 && !isSelected ? "#ccc" : addHover ? "#C45E00" : "#E86F00", 
+          border: "none", borderRadius: 2, cursor: isSelected || selectedCases.length < 3 ? "pointer" : "not-allowed", 
+          fontFamily: "inherit", transition: "all 0.2s", marginBottom: 14
+        }}
+        onClick={onToggleSelect}
+        onMouseEnter={() => setAddHover(true)}
+        onMouseLeave={() => setAddHover(false)}
+        disabled={!isSelected && selectedCases.length >= 3}
+      >
+        {isSelected ? "비교에서 제거" : "＋ 비교에 추가"}
+      </button>
       
       <div style={{ flex: 1 }}>
         {caseData.reco_reason && (
@@ -1025,20 +1057,6 @@ function CasePanel({ caseData, selectedCases, isSelected, onToggleSelect, onClos
             <polyline points="15 3 21 3 21 9"></polyline>
             <line x1="10" y1="14" x2="21" y2="3"></line>
           </svg>
-        </button>
-        <button
-          style={{ 
-            width: "100%", padding: "12px", fontSize: 14, fontWeight: 600, 
-            color: "#fff", background: isSelected ? "#1a1a1a" : selectedCases.length >= 3 && !isSelected ? "#ccc" : addHover ? "#C45E00" : "#E86F00", 
-            border: "none", borderRadius: 2, cursor: isSelected || selectedCases.length < 3 ? "pointer" : "not-allowed", 
-            fontFamily: "inherit", transition: "all 0.2s" 
-          }}
-          onClick={onToggleSelect}
-          onMouseEnter={() => setAddHover(true)}
-          onMouseLeave={() => setAddHover(false)}
-          disabled={!isSelected && selectedCases.length >= 3}
-        >
-          {isSelected ? "비교에서 제거" : "＋ 비교에 추가"}
         </button>
       </div>
     </div>
