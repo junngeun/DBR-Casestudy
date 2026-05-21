@@ -1581,6 +1581,6 @@ const styles = {
     fontSize: 20,
     fontWeight: 700,
     color: "#E86F00",
-    letterSpacing: "-0.01em",
+    letterSpacing: "-0.01em",  
   },
 };
