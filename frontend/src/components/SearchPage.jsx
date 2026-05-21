@@ -121,8 +121,6 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
         sorted.forEach((item, index) => { item.rank = index + 1; });
 
         setAllCases(sorted);
-
-        setAllCases([...mappedCases].sort((a, b) => (b.pub_year || 0) - (a.pub_year || 0)));
       } catch (error) {
         console.error("케이스 데이터 로딩 실패:", error);
         setCaseLoadError(error.message);
@@ -524,11 +522,6 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
           </div>
         </div>
 
-        {loading && (
-          <div style={styles.loadingStatusArea}>
-            <span style={styles.loadingStatusText}>문제 분석 및 케이스 매칭 중<LoadingEllipsis /></span>
-          </div>
-        )}
         {error && <p style={styles.errorText}>{error}</p>}
         {caseLoadError && <p style={styles.errorText}>{caseLoadError}</p>}
           </div>
@@ -618,7 +611,6 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
               onMouseEnter={() => setBrowseHover(true)}
               onMouseLeave={() => setBrowseHover(false)}
             >
-              {/* DBR 전체 케이스 {allCases.length}개 펼쳐보기 */}
               DBR 전체 케이스 펼쳐보기
             </button>
           </div>
@@ -720,6 +712,16 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
               <button style={styles.bottomBarBtnOutline} onClick={() => { setShowCompare(true); setSelectedCase(null); }}>케이스 비교하기</button>
               <button style={styles.bottomBarBtnFill}>내보내기</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {loading && (
+        <div style={styles.fullScreenLoading}>
+          <div style={styles.loadingContent}>
+            <span style={styles.loadingStatusTextCenter}>
+              문제 분석 및 케이스 매칭 중<LoadingEllipsis />
+            </span>
           </div>
         </div>
       )}
@@ -1243,4 +1245,34 @@ const styles = {
   bottomBarText: { fontSize: 15, color: "#fff" },
   bottomBarBtnOutline: { padding: "8px 16px", fontSize: 14, color: "#fff", background: "transparent", border: "1px solid #fff", borderRadius: 2, cursor: "pointer", fontFamily: "inherit" },
   bottomBarBtnFill: { padding: "8px 16px", fontSize: 14, color: "#1a1a1a", background: "#fff", border: "none", borderRadius: 2, cursor: "pointer", fontFamily: "inherit", fontWeight: 500 },
+
+  fullScreenLoading: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: "rgba(255, 255, 255, 0.7)",
+    backdropFilter: "blur(4px)",
+    zIndex: 9999,
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingContent: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 16,
+    padding: "40px 60px",
+    background: "#fff",
+    borderRadius: 16,
+    boxShadow: "0 10px 40px rgba(0,0,0,0.1)",
+  },
+  loadingStatusTextCenter: {
+    fontSize: 20,
+    fontWeight: 700,
+    color: "#E86F00",
+    letterSpacing: "-0.01em",
+  },
 };
