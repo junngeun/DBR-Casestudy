@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import CaseMap from "./CaseMap";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
@@ -70,6 +70,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
 
   const [browseHover, setBrowseHover] = useState(false);
   const [showSelectedList, setShowSelectedList] = useState(false);
+  const resultSectionRef = useRef(null);
 
   useEffect(() => {
     const fetchCases = async () => {
@@ -304,6 +305,13 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
       if (onSearch) {
         onSearch(mappedCases);
       }
+
+      setTimeout(() => {
+        resultSectionRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 120);
     } catch (e) {
       console.error("추천 API 호출 실패:", e);
       setError(e.message || "추천 결과를 불러오는 중 오류가 발생했습니다.");
@@ -485,7 +493,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
             />
 
             <div style={styles.exampleAreaInInput}>
-              <p style={styles.chipsLabel}>EX)</p>
+              <p style={styles.chipsLabel}>예시 고민</p>
               <div style={{ display: "flex", gap: 6, justifyContent: "center", marginBottom: 6, flexWrap: "wrap" }}>
                 <span style={styles.exampleChip}>조직 내 실행력이 너무 떨어지는데 어떻게 개선할 수 있을까요</span>
                 <span style={styles.exampleChip}>신사업을 시작하려는데 어느 시장부터 진입해야 할지 모르겠어요</span>
@@ -536,7 +544,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
         </div>
       </div>
 
-      <div style={styles.splitRow}>
+      <div ref={resultSectionRef} style={styles.splitRow}>
         <div style={styles.caseListCol}>
           <div style={styles.card}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
