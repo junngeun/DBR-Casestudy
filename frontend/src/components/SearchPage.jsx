@@ -50,6 +50,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
   const [popularCases, setPopularCases] = useState([]);
   const [popularLoading, setPopularLoading] = useState(false);
   const [popularError, setPopularError] = useState(null);
+  const [bookmarkedCaseIds, setBookmarkedCaseIds] = useState(new Set());
 
   const [selectedIndustry, setSelectedIndustry] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null);
@@ -187,6 +188,109 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
 
     fetchPopularCases();
   }, []);
+
+  const loadBookmarkedCaseIds = async () => {
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      setBookmarkedCaseIds(new Set());
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/bookmarks`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success || !Array.isArray(data.data)) {
+        setBookmarkedCaseIds(new Set());
+        return;
+      }
+
+      const nextIds = new Set(
+        data.data
+          .map((item) => String(item.case_idx))
+          .filter(Boolean)
+      );
+
+      setBookmarkedCaseIds(nextIds);
+    } catch (error) {
+      console.error("북마크 목록 확인 실패:", error);
+      setBookmarkedCaseIds(new Set());
+    }
+  };
+
+  useEffect(() => {
+    loadBookmarkedCaseIds();
+
+    const handleBookmarkUpdated = () => {
+      loadBookmarkedCaseIds();
+    };
+
+    window.addEventListener("bookmarkUpdated", handleBookmarkUpdated);
+    window.addEventListener("storage", handleBookmarkUpdated);
+
+    return () => {
+      window.removeEventListener("bookmarkUpdated", handleBookmarkUpdated);
+      window.removeEventListener("storage", handleBookmarkUpdated);
+    };
+  }, []);
+
+  const handleToggleBookmark = async (caseData) => {
+    const token = localStorage.getItem("token");
+    const caseIdx = caseData?.case_idx || caseData?.id;
+
+    if (!token) {
+      alert("북마크는 로그인 후 이용할 수 있습니다.");
+      return;
+    }
+
+    if (!caseIdx) {
+      alert("북마크할 케이스 정보를 찾지 못했습니다.");
+      return;
+    }
+
+    const caseKey = String(caseIdx);
+    const isAlreadyBookmarked = bookmarkedCaseIds.has(caseKey);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/bookmarks/${caseIdx}`, {
+        method: isAlreadyBookmarked ? "DELETE" : "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "북마크 처리에 실패했습니다.");
+      }
+
+      setBookmarkedCaseIds((prev) => {
+        const next = new Set(prev);
+
+        if (isAlreadyBookmarked) {
+          next.delete(caseKey);
+        } else {
+          next.add(caseKey);
+        }
+
+        return next;
+      });
+
+      window.dispatchEvent(new Event("bookmarkUpdated"));
+    } catch (error) {
+      console.error("북마크 처리 실패:", error);
+      alert(error.message || "북마크 처리 중 오류가 발생했습니다.");
+    }
+  };
+
 
   const handleSearch = async () => {
     const filters = [selectedIndustry, selectedCategory, selectedKeyword]
@@ -585,7 +689,9 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
                   item={c}
                   isSelected={!!selectedCases.find((s) => s.title === c.title)}
                   isViewing={selectedCase?.title === c.title}
+                  isBookmarked={bookmarkedCaseIds.has(String(c.case_idx ?? c.id))}
                   onClick={() => handleCaseSelect(c, result ? "recommend" : "archive")}
+                  onToggleBookmark={() => handleToggleBookmark(c)}
                   onRemove={() => setSelectedCases(prev => prev.filter(s => s.title !== c.title))}
                   onAdd={() => setSelectedCases(prev => prev.length < 3 ? [...prev, c] : prev)}
                 />
@@ -635,7 +741,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
                 >
                   <div style={styles.archiveHeader}>
                     <span style={styles.archiveIndustry}>{c.industry}</span>
-                    <span style={styles.archiveDate}>발행년도 : {c.date}</span>
+                    <span style={styles.archiveDate}>발행 연도 : {c.date}</span>
                   </div>
                   <div style={styles.archiveTitle}>{c.title}</div>
                   <div style={styles.archiveCompany}>{c.company}</div>
@@ -671,6 +777,8 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
           selectedCases={selectedCases}
           onToggleSelect={() => toggleSelectCase(selectedCase)}
           isSelected={!!selectedCases.find((s) => s.title === selectedCase.title)}
+          isBookmarked={bookmarkedCaseIds.has(String(selectedCase.case_idx ?? selectedCase.id))}
+          onToggleBookmark={() => handleToggleBookmark(selectedCase)}
           onClose={() => setSelectedCase(null)}
         />
       )}
@@ -886,29 +994,10 @@ function TagSection({ label, tags, color }) {
   );
 }
 
-function CaseItem({ item, isSelected, isViewing, onClick, onRemove, onAdd }) {
-  const [bookmarked, setBookmarked] = useState(false);
-
-  useEffect(() => {
-    const checkBookmark = () => {
-      const prev = JSON.parse(localStorage.getItem("bookmarks") || "[]");
-      setBookmarked(prev.some((b) => b.title === item.title));
-    };
-    checkBookmark();
-    window.addEventListener("bookmarkUpdated", checkBookmark);
-    return () => window.removeEventListener("bookmarkUpdated", checkBookmark);
-  }, [item.title]);
-
+function CaseItem({ item, isSelected, isViewing, isBookmarked, onClick, onToggleBookmark, onRemove, onAdd }) {
   const toggleBookmark = (e) => {
     e.stopPropagation();
-    const prev = JSON.parse(localStorage.getItem("bookmarks") || "[]");
-    const isAlreadyBookmarked = prev.some((b) => b.title === item.title);
-    const updated = isAlreadyBookmarked
-      ? prev.filter((b) => b.title !== item.title)
-      : [...prev, item];
-    localStorage.setItem("bookmarks", JSON.stringify(updated));
-    setBookmarked(!isAlreadyBookmarked);
-    window.dispatchEvent(new Event("bookmarkUpdated"));
+    onToggleBookmark?.();
   };
 
   return (
@@ -927,7 +1016,7 @@ function CaseItem({ item, isSelected, isViewing, onClick, onRemove, onAdd }) {
         <p style={styles.caseMeta}>{item.company}</p>
       </div>
       <button style={{ background: "none", border: "none", cursor: "pointer", padding: 4, flexShrink: 0 }} onClick={toggleBookmark}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill={bookmarked ? "#E86F00" : "none"} stroke="#E86F00" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill={isBookmarked ? "#E86F00" : "none"} stroke="#E86F00" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
         </svg>
       </button>
@@ -947,33 +1036,14 @@ function CaseItem({ item, isSelected, isViewing, onClick, onRemove, onAdd }) {
   );
 }
 
-function CasePanel({ caseData, selectedCases, isSelected, onToggleSelect, onClose }) {
-  const [bookmarked, setBookmarked] = useState(false);
+function CasePanel({ caseData, selectedCases, isSelected, isBookmarked, onToggleSelect, onToggleBookmark, onClose }) {
   const [linkHover, setLinkHover] = useState(false); 
   const [addHover, setAddHover] = useState(false);
-  
-  useEffect(() => {
-    const checkBookmark = () => {
-      const prev = JSON.parse(localStorage.getItem("bookmarks") || "[]");
-      setBookmarked(prev.some((b) => b.title === caseData.title));
-    };
-    checkBookmark();
-    window.addEventListener("bookmarkUpdated", checkBookmark);
-    return () => window.removeEventListener("bookmarkUpdated", checkBookmark);
-  }, [caseData.title]);
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
 
   const toggleBookmark = (e) => {
     e.stopPropagation();
-    const prev = JSON.parse(localStorage.getItem("bookmarks") || "[]");
-    const isAlreadyBookmarked = prev.some((b) => b.title === caseData.title);
-    
-    const updated = isAlreadyBookmarked 
-      ? prev.filter((b) => b.title !== caseData.title) 
-      : [...prev, caseData];
-      
-    localStorage.setItem("bookmarks", JSON.stringify(updated));
-    setBookmarked(!isAlreadyBookmarked);
-    window.dispatchEvent(new Event("bookmarkUpdated"));
+    onToggleBookmark?.();
   };
 
   const openOriginalArticle = () => {
@@ -983,12 +1053,13 @@ function CasePanel({ caseData, selectedCases, isSelected, onToggleSelect, onClos
   };
 
   return (
-    <div style={styles.panel}>
+    <>
+      <div style={styles.panel}>
       <div style={styles.panelHeader}>
         <h3 style={styles.panelTitle}>{caseData.title}</h3>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <button style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex", alignItems: "center", marginTop: 8 }} onClick={toggleBookmark}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill={bookmarked ? "#E86F00" : "none"} stroke="#E86F00" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill={isBookmarked ? "#E86F00" : "none"} stroke="#E86F00" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
             </svg>
           </button>
@@ -1027,8 +1098,21 @@ function CasePanel({ caseData, selectedCases, isSelected, onToggleSelect, onClos
         )}
 
         <div style={styles.reasonBox}>
-          <p style={styles.reasonTitle}>[ 상세 요약 및 전략 ]</p>
-          <p style={styles.reasonItem}>→ {caseData.summary}</p>
+          <div style={styles.summaryPreviewHeader}>
+            <div>
+              <p style={styles.reasonTitle}>[ 상세 요약 및 전략 ]</p>
+              <p style={styles.summaryPreviewText}>
+                긴 요약문은 별도 창에서 더 편하게 확인할 수 있어요.
+              </p>
+            </div>
+
+            <button
+              style={styles.summaryOpenBtn}
+              onClick={() => setShowSummaryModal(true)}
+            >
+              요약문 바로보기
+            </button>
+          </div>
         </div>
 
         {caseData.prob_def && (
@@ -1062,6 +1146,83 @@ function CasePanel({ caseData, selectedCases, isSelected, onToggleSelect, onClos
         </button>
       </div>
     </div>
+
+      {showSummaryModal && (
+        <CaseSummaryModal
+          caseData={caseData}
+          onClose={() => setShowSummaryModal(false)}
+          onOpenOriginal={openOriginalArticle}
+        />
+      )}
+    </>
+  );
+}
+
+function formatSummaryParagraphs(summary) {
+  if (!summary) return ["등록된 요약문이 없습니다."];
+
+  const normalized = String(summary)
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const sentences = normalized
+    .split(/(?<=[.!?。！？]|다\.|요\.|음\.|됨\.|했다\.|였다\.|한다\.|있다\.|됐다\.)\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+
+  if (sentences.length <= 1) {
+    return [normalized];
+  }
+
+  const paragraphs = [];
+
+  for (let i = 0; i < sentences.length; i += 2) {
+    paragraphs.push(sentences.slice(i, i + 2).join(" "));
+  }
+
+  return paragraphs;
+}
+
+function CaseSummaryModal({ caseData, onClose, onOpenOriginal }) {
+  return (
+    <>
+      <div style={styles.caseSummaryModalOverlay} onClick={onClose} />
+
+      <div style={styles.caseSummaryModal}>
+        <div style={styles.caseSummaryModalHeader}>
+          <div>
+            <p style={styles.caseSummaryModalLabel}>케이스 요약</p>
+            <h3 style={styles.caseSummaryModalTitle}>{caseData.title}</h3>
+            <p style={styles.caseSummaryModalMeta}>
+              {caseData.company || caseData.comp_name || "기업명 미등록"}
+              {caseData.industry ? ` · ${caseData.industry}` : ""}
+              {caseData.date ? ` · ${caseData.date}` : ""}
+            </p>
+          </div>
+
+          <button style={styles.caseSummaryModalCloseBtn} onClick={onClose}>
+            ✕
+          </button>
+        </div>
+
+        <div style={styles.caseSummaryModalBody}>
+          {formatSummaryParagraphs(caseData.summary).map((paragraph, index) => (
+            <p key={index} style={styles.caseSummaryParagraph}>
+              {paragraph}
+            </p>
+          ))}
+        </div>
+
+        <div style={styles.caseSummaryModalFooter}>
+          <button style={styles.caseSummaryModalSubBtn} onClick={onClose}>
+            닫기
+          </button>
+          <button style={styles.caseSummaryModalMainBtn} onClick={onOpenOriginal}>
+            DBR 원문 바로가기 →
+          </button>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -1241,6 +1402,153 @@ const styles = {
     transition: "all 0.2s"
   }, 
   
+
+
+  summaryPreviewHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
+  summaryPreviewText: {
+    fontSize: 13,
+    color: "#666",
+    lineHeight: 1.5,
+    margin: 0,
+  },
+
+  summaryOpenBtn: {
+    padding: "8px 12px",
+    fontSize: 13,
+    fontWeight: 700,
+    color: "#E86F00",
+    background: "#fff",
+    border: "1px solid #E86F00",
+    borderRadius: 2,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    whiteSpace: "nowrap",
+    flexShrink: 0,
+  },
+
+  caseSummaryModalOverlay: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: "rgba(0,0,0,0.45)",
+    zIndex: 1000,
+  },
+
+  caseSummaryModal: {
+    position: "fixed",
+    top: "50%",
+    left: "50%",
+    transform: "translate(-50%, -50%)",
+    width: "min(640px, calc(100vw - 40px))",
+    maxHeight: "78vh",
+    background: "#fff",
+    borderRadius: 16,
+    zIndex: 1100,
+    boxShadow: "0 18px 50px rgba(0,0,0,0.18)",
+    overflow: "hidden",
+    display: "flex",
+    flexDirection: "column",
+  },
+
+  caseSummaryModalHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 16,
+    padding: "22px 24px 18px",
+    borderBottom: "1px solid #f0f0f0",
+  },
+
+  caseSummaryModalLabel: {
+    fontSize: 13,
+    fontWeight: 800,
+    color: "#E86F00",
+    margin: "0 0 8px",
+  },
+
+  caseSummaryModalTitle: {
+    fontSize: 20,
+    fontWeight: 800,
+    color: "#1a1a1a",
+    lineHeight: 1.45,
+    margin: "0 0 8px",
+    letterSpacing: "-0.03em",
+  },
+
+  caseSummaryModalMeta: {
+    fontSize: 13,
+    color: "#999",
+    margin: 0,
+  },
+
+  caseSummaryModalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: "50%",
+    border: "none",
+    background: "#f7f7f7",
+    color: "#999",
+    cursor: "pointer",
+    fontSize: 16,
+    flexShrink: 0,
+  },
+
+  caseSummaryModalBody: {
+    padding: "22px 24px",
+    overflowY: "auto",
+    background: "#fff",
+  },
+
+  caseSummaryParagraph: {
+    fontSize: 15,
+    color: "#333",
+    lineHeight: 1.9,
+    margin: "0 0 18px",
+    letterSpacing: "-0.01em",
+    wordBreak: "keep-all",
+  },
+
+  caseSummaryModalFooter: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 8,
+    padding: "16px 24px",
+    borderTop: "1px solid #f0f0f0",
+    background: "#fafafa",
+  },
+
+  caseSummaryModalSubBtn: {
+    padding: "9px 16px",
+    fontSize: 14,
+    fontWeight: 700,
+    color: "#666",
+    background: "#fff",
+    border: "1px solid #ddd",
+    borderRadius: 4,
+    cursor: "pointer",
+    fontFamily: "inherit",
+  },
+
+  caseSummaryModalMainBtn: {
+    padding: "9px 16px",
+    fontSize: 14,
+    fontWeight: 800,
+    color: "#fff",
+    background: "#E86F00",
+    border: "none",
+    borderRadius: 4,
+    cursor: "pointer",
+    fontFamily: "inherit",
+  },
+
   bottomBar: { position: "fixed", bottom: 0, left: 0, right: 0, background: "#1a1a1a", padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", zIndex: 300 },
   bottomBarText: { fontSize: 15, color: "#fff" },
   bottomBarBtnOutline: { padding: "8px 16px", fontSize: 14, color: "#fff", background: "transparent", border: "1px solid #fff", borderRadius: 2, cursor: "pointer", fontFamily: "inherit" },
@@ -1273,6 +1581,6 @@ const styles = {
     fontSize: 20,
     fontWeight: 700,
     color: "#E86F00",
-    letterSpacing: "-0.01em",
+    letterSpacing: "-0.01em",  
   },
 };
