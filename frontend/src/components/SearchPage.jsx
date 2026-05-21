@@ -45,12 +45,16 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [invalidNotice, setInvalidNotice] = useState("");
   
   const [allCases, setAllCases] = useState([]);
   const [caseLoadError, setCaseLoadError] = useState(null);
   const [popularCases, setPopularCases] = useState([]);
   const [popularLoading, setPopularLoading] = useState(false);
   const [popularError, setPopularError] = useState(null);
+  const [popularQueries, setPopularQueries] = useState([]);
+  const [popularQueryLoading, setPopularQueryLoading] = useState(false);
+  const [popularQueryError, setPopularQueryError] = useState(null);
   const [bookmarkedCaseIds, setBookmarkedCaseIds] = useState(new Set());
 
   const [selectedIndustry, setSelectedIndustry] = useState(null);
@@ -190,6 +194,43 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
     fetchPopularCases();
   }, []);
 
+  const fetchPopularQueries = async () => {
+    setPopularQueryLoading(true);
+    setPopularQueryError(null);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/popular/queries?limit=10&days=7`);
+
+      if (!res.ok) {
+        throw new Error("인기 검색 키워드를 불러오지 못했습니다.");
+      }
+
+      const json = await res.json();
+
+      if (!json.success || !Array.isArray(json.data)) {
+        throw new Error("인기 검색 키워드 데이터 형식이 올바르지 않습니다.");
+      }
+
+      setPopularQueries(json.data);
+    } catch (error) {
+      console.error("인기 검색 키워드 로딩 실패:", error);
+      setPopularQueryError(error.message);
+    } finally {
+      setPopularQueryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPopularQueries();
+  }, []);
+
+  const handlePopularQueryClick = (keyword) => {
+    if (!keyword) return;
+    setQuery(keyword);
+    setTextareaFocused(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const loadBookmarkedCaseIds = async () => {
     const token = localStorage.getItem("token");
 
@@ -317,6 +358,85 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
   };
 
 
+  const saveSearchQueryLog = async (searchQuery, queryMeta, recommendations = []) => {
+    if (!searchQuery) return null;
+
+    const isValidBusinessQuery = queryMeta?.is_valid_business_query !== false;
+    const displayKeyword = queryMeta?.display_keyword
+      ? String(queryMeta.display_keyword).trim()
+      : "";
+
+    const keywordGroup = queryMeta?.keyword_group
+      ? String(queryMeta.keyword_group).trim()
+      : displayKeyword;
+
+    const blockedDisplayKeywords = [
+      "검색 의도 확인 필요",
+      "기타",
+      "일반 문의",
+      "분류 불가",
+      "확인 필요",
+      "의도 확인 필요",
+      "비즈니스 의도 확인 필요",
+    ];
+
+    const blockedPattern = /(test|asdf|qwer|ㅋㅋ|ㅎㅎ|짜증|시발|ㅅㅂ|개빡|몰라|안녕|뭐해)/i;
+
+    const hasBlockedKeyword =
+      !displayKeyword ||
+      !keywordGroup ||
+      blockedDisplayKeywords.includes(displayKeyword) ||
+      blockedDisplayKeywords.includes(keywordGroup) ||
+      blockedPattern.test(displayKeyword) ||
+      blockedPattern.test(keywordGroup);
+
+    if (!isValidBusinessQuery || hasBlockedKeyword || recommendations.length === 0) {
+      console.log("검색 로그 저장 제외:", {
+        isValidBusinessQuery,
+        displayKeyword,
+        keywordGroup,
+        recommendationCount: recommendations.length,
+        invalidReason: queryMeta?.invalid_reason || null,
+      });
+
+      return null;
+    }
+
+    try {
+      const token = localStorage.getItem("token");
+
+      const res = await fetch(`${API_BASE_URL}/api/logs/query`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          query_text: searchQuery,
+          prob_main: queryMeta?.prob_main || null,
+          prob_keyword: Array.isArray(queryMeta?.prob_keyword)
+            ? queryMeta.prob_keyword.join(", ")
+            : queryMeta?.prob_keyword || null,
+          industry: queryMeta?.industry || null,
+          sol_type: queryMeta?.sol_type || null,
+          display_keyword: displayKeyword,
+          keyword_group: keywordGroup,
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.message || "검색 로그 저장에 실패했습니다.");
+      }
+
+      return data.query_idx || data.data?.query_idx || null;
+    } catch (error) {
+      console.error("검색 로그 저장 실패:", error);
+      return null;
+    }
+  };
+
   const handleSearch = async () => {
     const filters = [selectedIndustry, selectedCategory, selectedKeyword]
       .filter((val) => val && val !== "상관없음")
@@ -333,6 +453,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
     setLoading(true);
     setResult(null);
     setError(null);
+    setInvalidNotice("");
 
     try {
       const requestBody = {
@@ -359,6 +480,45 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
       const queryMeta = data.query_meta || {};
       const resultStatus = data.result_status || {};
       const recommendations = data.recommendations || [];
+
+      if (queryMeta.is_valid_business_query === false || recommendations.length === 0) {
+        const noticeMessage =
+          resultStatus.message ||
+          queryMeta.invalid_reason ||
+          "입력하신 내용만으로는 어떤 비즈니스 문제를 해결하려는지 파악하기 어려워요. 해결하고 싶은 상황을 조금 더 구체적으로 적어주세요.";
+
+        setResult({
+          problem_summary: noticeMessage,
+          problem_types: [],
+          kpis: [],
+          causes: [],
+          query_idx: null,
+          query_meta: queryMeta,
+          result_status: {
+            status: "NO_RESULT",
+            message: noticeMessage,
+          },
+          cases: [],
+        });
+
+        setInvalidNotice(noticeMessage);
+
+        if (onSearch) {
+          onSearch([]);
+        }
+
+        setTimeout(() => {
+          setInvalidNotice("");
+        }, 3200);
+
+        return;
+      }
+
+      const savedQueryIdx = await saveSearchQueryLog(searchQuery, queryMeta, recommendations);
+
+      if (savedQueryIdx) {
+        fetchPopularQueries();
+      }
 
       const mappedCases = recommendations.map((item, index) => ({
         id: item.case_idx,
@@ -424,6 +584,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
           ...(Array.isArray(queryMeta.must_have) ? queryMeta.must_have : []),
         ].filter(Boolean),
 
+        query_idx: savedQueryIdx,
         query_meta: queryMeta,
         result_status: resultStatus,
         cases: mappedCases,
@@ -512,7 +673,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
         },
         body: JSON.stringify({
           case_idx: caseIdx,
-          query_idx: null,
+          query_idx: ["recommend", "map"].includes(viewSource) ? result?.query_idx || null : null,
           view_source: viewSource,
         }),
       });
@@ -657,11 +818,15 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
         </div>
 
         <div style={styles.popularSideCol}>
-          <PopularCaseBox
+          <PopularRankBoard
             cases={popularCases}
-            loading={popularLoading}
-            error={popularError}
+            caseLoading={popularLoading}
+            caseError={popularError}
             onCaseClick={(caseData) => handleCaseSelect(caseData, "archive")}
+            queries={popularQueries}
+            queryLoading={popularQueryLoading}
+            queryError={popularQueryError}
+            onQueryClick={handlePopularQueryClick}
           />
         </div>
       </div>
@@ -866,7 +1031,105 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
           </div>
         </div>
       )}
+
+      {invalidNotice && (
+        <div style={styles.fullScreenLoading}>
+          <div style={styles.invalidNoticeContent}>
+            <div style={styles.invalidNoticeIcon}>!</div>
+            <p style={styles.invalidNoticeTitle}>검색 의도를 확인하기 어려워요</p>
+            <p style={styles.invalidNoticeText}>{invalidNotice}</p>
+            <div style={styles.invalidNoticeExamples}>
+              <span style={styles.invalidNoticeExampleLabel}>이렇게 입력해보세요</span>
+              <p style={styles.invalidNoticeExampleText}>고객 이탈률을 줄이고 싶어요</p>
+              <p style={styles.invalidNoticeExampleText}>신사업 진입 전략을 참고하고 싶어요</p>
+              <p style={styles.invalidNoticeExampleText}>브랜드 인지도는 높은데 구매 전환이 안 돼요</p>
+            </div>
+          </div>
+        </div>
+      )}
     </>
+  );
+}
+
+function PopularRankBoard({
+  cases,
+  caseLoading,
+  caseError,
+  onCaseClick,
+  queries,
+  queryLoading,
+  queryError,
+  onQueryClick,
+}) {
+  return (
+    <div style={styles.popularRankBoard}>
+      <div style={styles.popularRankColumn}>
+        <div style={styles.popularColumnHeader}>
+          <h3 style={styles.popularTitle}>인기 케이스</h3>
+          <span style={styles.popularBadge}>TOP 5</span>
+        </div>
+
+        {caseLoading && <p style={styles.popularMessage}>인기 케이스를 불러오는 중...</p>}
+        {caseError && <p style={styles.popularMessage}>{caseError}</p>}
+        {!caseLoading && !caseError && cases.length === 0 && (
+          <p style={styles.popularMessage}>아직 충분한 조회 데이터가 없습니다.</p>
+        )}
+
+        {!caseLoading && !caseError && cases.length > 0 && (
+          <div style={styles.popularCompactList}>
+            {cases.map((item, index) => (
+              <button
+                key={item.case_idx || item.id}
+                style={styles.popularCompactItem}
+                onClick={() => onCaseClick(item)}
+                title={item.title}
+              >
+                <span style={styles.popularCompactRank}>{index + 1}</span>
+                <span style={styles.popularCompactBody}>
+                  <span style={styles.popularCompactMeta}>{item.industry || "산업 미분류"}</span>
+                  <span style={styles.popularCompactTitle}>{item.title}</span>
+                  <span style={styles.popularCompactCompany}>{item.company}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div style={styles.popularRankDivider} />
+
+      <div style={styles.popularRankColumn}>
+        <div style={styles.popularColumnHeader}>
+          <h3 style={styles.popularTitle}>인기 키워드</h3>
+          <span style={styles.popularBadge}>TOP 10</span>
+        </div>
+
+        {queryLoading && <p style={styles.popularMessage}>인기 키워드를 불러오는 중...</p>}
+        {queryError && <p style={styles.popularMessage}>{queryError}</p>}
+        {!queryLoading && !queryError && queries.length === 0 && (
+          <p style={styles.popularMessage}>검색을 진행하면 키워드 순위가 쌓입니다.</p>
+        )}
+
+        {!queryLoading && !queryError && queries.length > 0 && (
+          <div style={styles.popularCompactList}>
+            {queries.map((item, index) => (
+              <button
+                key={`${item.keyword_group || item.display_keyword}-${index}`}
+                style={styles.popularKeywordItem}
+                onClick={() => onQueryClick(item.keyword_group || item.display_keyword)}
+                title="검색창에 입력하기"
+              >
+                <span style={styles.popularCompactRank}>{index + 1}</span>
+                <span style={styles.popularKeywordText}>
+                  {item.keyword_group || item.display_keyword}
+                </span>
+                {/* <span style={styles.popularKeywordCount}>{item.search_count || 0}</span> */}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -876,7 +1139,7 @@ function PopularCaseBox({ cases, loading, error, onCaseClick }) {
       <div style={styles.popularHeader}>
         <div>
           {/* <p style={styles.popularEyebrow}>실시간 탐색 데이터</p> */}
-          <h3 style={styles.popularTitle}>많이 조회된 케이스</h3>
+          <h3 style={styles.popularTitle}>인기 케이스</h3>
         </div>
         <span style={styles.popularBadge}>TOP 5</span>
       </div>
@@ -1315,11 +1578,25 @@ function CompareSidebar({ cases, onRemove, onClose }) {
 }
 
 const styles = {
-  topSearchLayout: { maxWidth: 1400, margin: "0 auto", padding: "2.5rem 2rem 0", display: "grid", gridTemplateColumns: "minmax(0, 1fr) 340px", gap: 24, alignItems: "start", boxSizing: "border-box" },
+  topSearchLayout: { width: "min(1600px, calc(100vw - 96px))", margin: "0 auto", padding: "2.5rem 0 0", display: "grid", gridTemplateColumns: "minmax(840px, 1fr) 560px", gap: 24, alignItems: "start", boxSizing: "border-box" },
   searchMainCol: { minWidth: 0 },
-  popularSideCol: { position: "sticky", top: 96 },
+  popularSideCol: { position: "sticky", top: 96, minWidth: 0 },
+  popularRankBoard: { background: "#fff", border: "1px solid #ede8e2", borderRadius: 12, padding: "16px", boxShadow: "0 2px 10px rgba(0,0,0,0.03)", display: "grid", gridTemplateColumns: "1.05fr 1px 0.95fr", gap: 14, minHeight: 520 },
+  popularRankColumn: { minWidth: 0, display: "flex", flexDirection: "column" },
+  popularRankDivider: { width: 1, background: "#f0f0f0", alignSelf: "stretch" },
+  popularColumnHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 14 },
+  popularCompactList: { display: "flex", flexDirection: "column", gap: 8 },
+  popularCompactItem: { width: "100%", display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 8px", background: "#fff", border: "1px solid #f0f0f0", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", textAlign: "left", transition: "all 0.2s" },
+  popularCompactRank: { fontSize: 14, fontWeight: 800, color: "#E86F00", flexShrink: 0, minWidth: 14, lineHeight: 1.4 },
+  popularCompactBody: { flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3 },
+  popularCompactMeta: { fontSize: 12, color: "#E86F00", fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+  popularCompactTitle: { fontSize: 13.5, fontWeight: 700, color: "#1a1a1a", lineHeight: 1.45, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
+  popularCompactCompany: { fontSize: 12, color: "#999", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+  popularKeywordItem: { width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "7px 8px", background: "#fff", border: "1px solid #f0f0f0", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", textAlign: "left", transition: "all 0.2s" },
+  popularKeywordText: { flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 800, color: "#1a1a1a", lineHeight: 1.35, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+  popularKeywordCount: { minWidth: 22, height: 20, padding: "0 6px", borderRadius: 999, background: "#FEF0E9", color: "#E86F00", fontSize: 12, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" },
   page: { width: "100%", margin: "0 auto", padding: 0, fontFamily: "'Pretendard', 'Apple SD Gothic Neo', sans-serif", boxSizing: "border-box" },
-  splitRow: { display: "flex", gap: 16, alignItems: "flex-start", maxWidth: 1400, margin: "0 auto", padding: "0 2rem 2rem" },
+  splitRow: { display: "flex", gap: 16, alignItems: "flex-start", width: "min(1600px, calc(100vw - 96px))", margin: "0 auto", padding: "0 0 2rem", boxSizing: "border-box" },
   caseListCol: { width: 420, flexShrink: 0, borderRight: "1px solid #e0e0e0", paddingRight: 16 },
   mapCol: { flex: 1, minWidth: 0 },
   logoArea: { marginBottom: "2.5rem" },
@@ -1414,176 +1691,40 @@ const styles = {
   archiveTitle: { fontSize: 18, fontWeight: 900, color: "#1a1a1a", marginBottom: 4 },
   archiveCompany: { fontSize: 15, color: "#666", marginBottom: 8 },
   archiveSummary: { fontSize: 14, color: "#666", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
-  btnLoadMore: { padding: "12px 80px", fontSize: 16, fontWeight: 600, color: "#fff", background: "#1a1a1a", border: "none", borderRadius: 2, cursor: "pointer", transition: "background 0.2s" },
+  btnLoadMore: { padding: "12px 30px", fontSize: 14, fontWeight: 600, color: "#E86F00", background: "#fff", border: "1px solid #E86F00", borderRadius: 2, cursor: "pointer" },
 
-  panel: { position: "fixed", top: 0, right: 0, width: 460, height: "100vh", background: "#fff", borderLeft: "1px solid #e8e8e8", padding: "1.5rem", paddingBottom: 100, overflowY: "auto", zIndex: 200, boxSizing: "border-box", boxShadow: "-4px 0 20px rgba(0,0,0,0.08)", display: "flex", flexDirection: "column" },
-  
-  panelHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
-  panelTitle: { fontSize: 17, fontWeight: 600, color: "#1a1a1a", lineHeight: 1.4, flex: 1, marginRight: 8 },
-  panelMeta: { fontSize: 14, color: "#999", marginBottom: 10 },
-  reasonBox: { background: "#F5F5F5", borderRadius: 2, padding: "12px 14px", marginBottom: 14 },
-  reasonBoxWhite: { background: "#fff", border: "1px solid #f0f0f0", borderRadius: 2, padding: "12px 14px", marginBottom: 14 },
-  reasonTitle: { fontSize: 15, fontWeight: 600, color: "#E86F00", marginBottom: 6 },
-  reasonTitleDark: { fontSize: 14, fontWeight: 600, color: "#1a1a1a", marginBottom: 6 },
-  reasonItem: { fontSize: 14, color: "#1a1a1a", marginBottom: 3, lineHeight: 1.6 },
-  
-  panelLink: { 
-    width: "100%", padding: "12px", fontSize: 14, fontWeight: 600, 
-    color: "#E86F00", background: "#fff", border: "1px solid #E86F00", 
-    borderRadius: 2, cursor: "pointer", fontFamily: "inherit",
-    display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-    transition: "all 0.2s"
-  }, 
+  panel: { position: "fixed", top: 72, right: 0, width: 420, height: "calc(100vh - 72px)", background: "#fff", borderLeft: "1px solid #e0e0e0", boxShadow: "-4px 0 20px rgba(0,0,0,0.08)", zIndex: 200, padding: "2rem", boxSizing: "border-box", overflowY: "auto", display: "flex", flexDirection: "column" },
+  panelHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 },
+  panelTitle: { fontSize: 20, fontWeight: 700, color: "#1a1a1a", lineHeight: 1.4, margin: 0, flex: 1 },
+  panelMeta: { fontSize: 15, color: "#666", marginBottom: 16 },
+  reasonBox: { background: "#FEF0E9", borderRadius: 4, padding: "14px", marginBottom: 14 },
+  reasonBoxWhite: { background: "#fff", border: "1px solid #eee", borderRadius: 4, padding: "14px", marginBottom: 14 },
+  reasonTitle: { fontSize: 13, fontWeight: 700, color: "#E86F00", marginBottom: 6 },
+  reasonTitleDark: { fontSize: 13, fontWeight: 700, color: "#333", marginBottom: 6 },
+  reasonItem: { fontSize: 14, color: "#555", lineHeight: 1.6, margin: 0 },
+  panelLink: { width: "100%", padding: "12px", fontSize: 14, fontWeight: 600, color: "#E86F00", background: "#fff", border: "1px solid #E86F00", borderRadius: 2, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "all 0.2s" },
 
-  summaryPreviewHeader: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
+  summaryPreviewHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14 },
+  summaryPreviewText: { fontSize: 13, color: "#666", lineHeight: 1.5, margin: 0 },
+  summaryOpenBtn: { flexShrink: 0, padding: "8px 11px", fontSize: 12.5, fontWeight: 800, color: "#E86F00", background: "#fff", border: "1px solid #E86F00", borderRadius: 4, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" },
 
-  summaryPreviewText: {
-    fontSize: 13,
-    color: "#666",
-    lineHeight: 1.5,
-    margin: 0,
-  },
+  caseSummaryModalOverlay: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000 },
+  caseSummaryModal: { position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "min(620px, calc(100vw - 40px))", maxHeight: "78vh", background: "#fff", borderRadius: 16, zIndex: 1100, boxShadow: "0 18px 50px rgba(0,0,0,0.18)", overflow: "hidden", display: "flex", flexDirection: "column" },
+  caseSummaryModalHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, padding: "22px 24px 18px", borderBottom: "1px solid #f0f0f0" },
+  caseSummaryModalLabel: { fontSize: 13, fontWeight: 800, color: "#E86F00", margin: "0 0 8px" },
+  caseSummaryModalTitle: { fontSize: 20, fontWeight: 800, color: "#1a1a1a", lineHeight: 1.45, margin: "0 0 8px", letterSpacing: "-0.03em" },
+  caseSummaryModalMeta: { fontSize: 13, color: "#999", margin: 0 },
+  caseSummaryModalCloseBtn: { width: 32, height: 32, borderRadius: "50%", border: "none", background: "#f7f7f7", color: "#999", cursor: "pointer", fontSize: 16, flexShrink: 0 },
+  caseSummaryModalBody: { padding: "22px 24px", overflowY: "auto" },
+  caseSummaryParagraph: { fontSize: 15, color: "#333", lineHeight: 1.9, margin: "0 0 18px", letterSpacing: "-0.01em", wordBreak: "keep-all" },
+  caseSummaryModalFooter: { display: "flex", justifyContent: "flex-end", gap: 8, padding: "16px 24px", borderTop: "1px solid #f0f0f0", background: "#fafafa" },
+  caseSummaryModalSubBtn: { padding: "9px 16px", fontSize: 14, fontWeight: 700, color: "#666", background: "#fff", border: "1px solid #ddd", borderRadius: 4, cursor: "pointer", fontFamily: "inherit" },
+  caseSummaryModalMainBtn: { padding: "9px 16px", fontSize: 14, fontWeight: 800, color: "#fff", background: "#E86F00", border: "none", borderRadius: 4, cursor: "pointer", fontFamily: "inherit" },
 
-  summaryOpenBtn: {
-    padding: "8px 12px",
-    fontSize: 13,
-    fontWeight: 700,
-    color: "#E86F00",
-    background: "#fff",
-    border: "1px solid #E86F00",
-    borderRadius: 2,
-    cursor: "pointer",
-    fontFamily: "inherit",
-    whiteSpace: "nowrap",
-    flexShrink: 0,
-  },
-
-  caseSummaryModalOverlay: {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    background: "rgba(0,0,0,0.45)",
-    zIndex: 1000,
-  },
-
-  caseSummaryModal: {
-    position: "fixed",
-    top: "50%",
-    left: "50%",
-    transform: "translate(-50%, -50%)",
-    width: "min(640px, calc(100vw - 40px))",
-    maxHeight: "78vh",
-    background: "#fff",
-    borderRadius: 16,
-    zIndex: 1100,
-    boxShadow: "0 18px 50px rgba(0,0,0,0.18)",
-    overflow: "hidden",
-    display: "flex",
-    flexDirection: "column",
-  },
-
-  caseSummaryModalHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 16,
-    padding: "22px 24px 18px",
-    borderBottom: "1px solid #f0f0f0",
-  },
-
-  caseSummaryModalLabel: {
-    fontSize: 13,
-    fontWeight: 800,
-    color: "#E86F00",
-    margin: "0 0 8px",
-  },
-
-  caseSummaryModalTitle: {
-    fontSize: 20,
-    fontWeight: 800,
-    color: "#1a1a1a",
-    lineHeight: 1.45,
-    margin: "0 0 8px",
-    letterSpacing: "-0.03em",
-  },
-
-  caseSummaryModalMeta: {
-    fontSize: 13,
-    color: "#999",
-    margin: 0,
-  },
-
-  caseSummaryModalCloseBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: "50%",
-    border: "none",
-    background: "#f7f7f7",
-    color: "#999",
-    cursor: "pointer",
-    fontSize: 16,
-    flexShrink: 0,
-  },
-
-  caseSummaryModalBody: {
-    padding: "22px 24px",
-    overflowY: "auto",
-    background: "#fff",
-  },
-
-  caseSummaryParagraph: {
-    fontSize: 15,
-    color: "#333",
-    lineHeight: 1.9,
-    margin: "0 0 18px",
-    letterSpacing: "-0.01em",
-    wordBreak: "keep-all",
-  },
-
-  caseSummaryModalFooter: {
-    display: "flex",
-    justifyContent: "flex-end",
-    gap: 8,
-    padding: "16px 24px",
-    borderTop: "1px solid #f0f0f0",
-    background: "#fafafa",
-  },
-
-  caseSummaryModalSubBtn: {
-    padding: "9px 16px",
-    fontSize: 14,
-    fontWeight: 700,
-    color: "#666",
-    background: "#fff",
-    border: "1px solid #ddd",
-    borderRadius: 4,
-    cursor: "pointer",
-    fontFamily: "inherit",
-  },
-
-  caseSummaryModalMainBtn: {
-    padding: "9px 16px",
-    fontSize: 14,
-    fontWeight: 800,
-    color: "#fff",
-    background: "#E86F00",
-    border: "none",
-    borderRadius: 4,
-    cursor: "pointer",
-    fontFamily: "inherit",
-  },
-
-  bottomBar: { position: "fixed", bottom: 0, left: 0, right: 0, background: "#1a1a1a", padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", zIndex: 300 },
-  bottomBarText: { fontSize: 15, color: "#fff" },
-  bottomBarBtnOutline: { padding: "8px 16px", fontSize: 14, color: "#fff", background: "transparent", border: "1px solid #fff", borderRadius: 2, cursor: "pointer", fontFamily: "inherit" },
-  bottomBarBtnFill: { padding: "8px 16px", fontSize: 14, color: "#1a1a1a", background: "#fff", border: "none", borderRadius: 2, cursor: "pointer", fontFamily: "inherit", fontWeight: 500 },
+  bottomBar: { position: "fixed", bottom: 0, left: 0, right: 0, background: "#1a1a1a", color: "#fff", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 24px", zIndex: 300, boxShadow: "0 -4px 12px rgba(0,0,0,0.15)" },
+  bottomBarText: { fontSize: 14, fontWeight: 500 },
+  bottomBarBtnOutline: { padding: "8px 16px", fontSize: 13, color: "#fff", background: "transparent", border: "1px solid #666", borderRadius: 2, cursor: "pointer" },
+  bottomBarBtnFill: { padding: "8px 16px", fontSize: 13, color: "#1a1a1a", background: "#fff", border: "none", borderRadius: 2, cursor: "pointer" },
 
   fullScreenLoading: {
     position: "fixed",
@@ -1638,5 +1779,72 @@ const styles = {
     background: "#E86F00",
     borderRadius: 4,
     transition: "width 0.4s ease-out"
+  },
+
+  invalidNoticeContent: {
+    width: 520,
+    maxWidth: "calc(100vw - 40px)",
+    padding: "34px 38px",
+    background: "#fff",
+    borderRadius: 16,
+    boxShadow: "0 10px 40px rgba(0,0,0,0.12)",
+    border: "1px solid #f0f0f0",
+    textAlign: "center",
+    boxSizing: "border-box",
+  },
+
+  invalidNoticeIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: "50%",
+    background: "#FEF0E9",
+    color: "#E86F00",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 20,
+    fontWeight: 900,
+    margin: "0 auto 14px",
+  },
+
+  invalidNoticeTitle: {
+    fontSize: 20,
+    fontWeight: 800,
+    color: "#1a1a1a",
+    margin: "0 0 10px",
+    letterSpacing: "-0.02em",
+  },
+
+  invalidNoticeText: {
+    fontSize: 14,
+    color: "#555",
+    lineHeight: 1.7,
+    margin: "0 0 20px",
+    wordBreak: "keep-all",
+  },
+
+  invalidNoticeExamples: {
+    background: "#fafafa",
+    border: "1px solid #eeeeee",
+    borderRadius: 10,
+    padding: "14px 16px",
+    textAlign: "left",
+    fontSize: 13,
+    color: "#666",
+    lineHeight: 1.6,
+  },
+
+  invalidNoticeExampleLabel: {
+    display: "block",
+    fontSize: 12,
+    fontWeight: 800,
+    color: "#E86F00",
+    marginBottom: 6,
+  },
+
+  invalidNoticeExampleText: {
+    margin: "2px 0",
+    fontSize: 13,
+    color: "#666",
   },
 };

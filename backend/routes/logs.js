@@ -93,4 +93,97 @@ router.post("/view", async (req, res) => {
   }
 });
 
+/**
+ * 검색 로그 저장
+ * POST /api/logs/query
+ */
+router.post("/query", async (req, res) => {
+  try {
+    const member = getMemberFromToken(req);
+
+    const {
+      query_text,
+      prob_main = null,
+      prob_keyword = null,
+      industry = null,
+      sol_type = null,
+      display_keyword = null,
+      keyword_group = null,
+    } = req.body;
+
+    if (!query_text || !String(query_text).trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "query_text가 필요합니다.",
+      });
+    }
+
+    const safeDisplayKeyword = display_keyword
+      ? String(display_keyword).trim().slice(0, 100)
+      : null;
+    
+    const safeKeywordGroup = keyword_group
+      ? String(keyword_group).trim().slice(0, 100)
+      : safeDisplayKeyword;
+
+    const result = await pool.query(
+      `
+      INSERT INTO t_query (
+      query_text,
+      prob_main,
+      prob_keyword,
+      industry,
+      sol_type,
+      member_idx,
+      display_keyword,
+      keyword_group
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    RETURNING
+      query_idx,
+      query_text,
+      prob_main,
+      prob_keyword,
+      industry,
+      sol_type,
+      member_idx,
+      display_keyword,
+      keyword_group,
+      created_at;
+      `,
+      [
+        String(query_text).trim(),
+        prob_main,
+        Array.isArray(prob_keyword) ? prob_keyword.join(", ") : prob_keyword,
+        industry,
+        sol_type,
+        member?.member_idx || null,
+        safeDisplayKeyword,
+        safeKeywordGroup,
+      ]
+    );
+
+    return res.status(201).json({
+      success: true,
+      message: "검색 로그가 저장되었습니다.",
+      data: result.rows[0],
+      query_idx: result.rows[0].query_idx,
+    });
+  } catch (error) {
+    console.error("검색 로그 저장 오류:", {
+      message: error.message,
+      code: error.code,
+      detail: error.detail,
+      constraint: error.constraint,
+      table: error.table,
+      column: error.column,
+    });
+
+    return res.status(500).json({
+      success: false,
+      message: "검색 로그 저장 중 서버 오류가 발생했습니다.",
+    });
+  }
+});
+
 module.exports = router;

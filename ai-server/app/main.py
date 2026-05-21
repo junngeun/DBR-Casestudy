@@ -200,23 +200,87 @@ def analyze_query_with_gpt_mini(query_text: str) -> Dict[str, Any]:
 
 반환 형식:
 {
+  "is_valid_business_query": true,
+  "invalid_reason": null,
   "prob_main": "성장|고객|효율|혁신|null",
   "prob_keyword": ["키워드1", "키워드2"],
   "expected_cause": "사용자가 이런 사례를 찾는 이유",
   "perf_type": "기대 성과 유형",
   "sol_type": "마케팅·브랜딩|기술 도입|제품·서비스 개선|플랫폼 활용|운영 효율화|수익화|null",
   "industry": "산업군 또는 null",
-  "expanded_query": "검색에 사용할 확장 질의",
+  "display_keyword": "사용자 화면에 보여줄 짧은 정제 문구",
+  "keyword_group": "인기 검색어 순위 집계에 사용할 표준 대표 키워드",
+  "expanded_query": "검색에 사용할 확장 질의 또는 null",
   "must_have": ["핵심 조건1", "핵심 조건2"],
   "nice_to_have": ["있으면 좋은 조건1"],
   "exclude": ["제외해야 할 조건1"]
 }
+
+입력 유효성 판단 규칙:
+- 사용자의 입력이 비즈니스 문제, 경영 고민, 마케팅/브랜딩/운영/고객/성장/혁신 관련 케이스 탐색 의도라면 is_valid_business_query를 true로 한다.
+- 감정 표현만 있거나 의미 없는 테스트 입력이면 is_valid_business_query를 false로 한다.
+- 인사, 잡담, 욕설, 단순 불만, 무의미한 반복문자, 서비스 범위 밖 질문이면 is_valid_business_query를 false로 한다.
+- 예: "아 짜증나네", "안녕", "뭐해", "test", "asdf", "ㅋㅋㅋㅋ", "도와줘"처럼 비즈니스 문제를 특정할 수 없는 입력은 false다.
+- 단, "마케팅", "AI", "성장"처럼 짧더라도 산업군/문제유형 필터가 함께 제공되어 케이스 탐색 의도가 확인되면 true로 볼 수 있다.
+- false일 때는 invalid_reason에 이유를 짧게 작성한다.
+- false일 때는 prob_main, perf_type, sol_type, industry, display_keyword, expanded_query를 null로 둔다.
+- false일 때는 prob_keyword, must_have, nice_to_have, exclude를 빈 배열로 둔다.
+- false일 때 display_keyword를 절대 만들지 않는다.
+- "검색 의도 확인 필요", "기타", "일반 문의", "분류 불가", "확인 필요" 같은 문구를 display_keyword로 만들지 않는다.
+
+display_keyword 작성 규칙:
+- is_valid_business_query가 true일 때만 작성한다.
+- 사용자 원문을 그대로 복사하지 않는다.
+- 비속어, 감정 표현, 개인정보, 회사명, 인명은 제거한다.
+- 10~20자 안팎의 자연스러운 문제 해결형 문구로 작성한다.
+- 너무 추상적인 대분류 단어만 쓰지 않는다.
+- "성장", "고객", "효율", "혁신" 같은 단어만 단독으로 쓰지 않는다.
+- 사용자가 해결하고 싶은 문제 형태로 작성한다.
+- 명사형 또는 문제 해결형 표현으로 작성한다.
+- 사용자가 명확히 입력한 핵심 키워드는 가능하면 유지한다.
+- 의미를 과도하게 확장하거나 좁히지 않는다.
+- 사용자가 말하지 않은 세부 실행 방식은 추가하지 않는다.
+- 예: 사용자가 "AI 마케팅"이라고만 입력했다면 "AI 마케팅 자동화"보다 "AI 기반 마케팅"처럼 넓게 표현한다.
+- 예: 사용자가 "리브랜딩"이라고 입력했다면 "브랜드 재정비"로 바꾸기보다 "리브랜딩 전략"을 유지한다.
+- 좋은 예: "수익성 악화 개선", "고객 이탈률 낮추기", "구매 전환율 높이기", "AI 기반 마케팅", "조직 실행력 개선", "물류 비용 절감", "리브랜딩 전략", "신시장 진입 전략"
+- 나쁜 예: "성장", "고객", "효율", "디지털전환", "마케팅", 사용자 원문 그대로, 사용자 의도보다 좁아진 표현
+
+keyword_group 작성 규칙:
+- keyword_group은 인기 검색어 순위 집계를 위한 표준 대표 키워드다.
+- display_keyword보다 더 표준화된 표현으로 작성한다.
+- 의미가 비슷한 검색어는 반드시 같은 keyword_group으로 묶는다.
+- 사용자 원문을 그대로 복사하지 않는다.
+- 너무 넓은 대분류 단어만 쓰지 않는다.
+- 8~20자 안팎의 명사형 또는 문제 해결형 표현으로 작성한다.
+- 사용자가 말하지 않은 세부 실행 방식은 추가하지 않는다.
+- 비즈니스 의도가 유효하지 않으면 keyword_group은 null로 둔다.
+
+대표 묶음 예시:
+- 리브랜딩, 브랜드 재정비, 브랜드 이미지 개선, 브랜드 포지셔닝 전환 → "리브랜딩 전략"
+- AI 마케팅, AI 활용 마케팅, AI 기반 캠페인, 마케팅 AI 도입 → "AI 기반 마케팅"
+- 매출은 나는데 돈이 안 남음, 수익성 저하, 이익률 악화, 비용 부담 → "수익성 악화 개선"
+- 고객 이탈, 이탈률 증가, 재방문 감소, 충성도 하락 → "고객 이탈률 낮추기"
+- 구매 전환 저하, 전환율 하락, 인지도는 높은데 구매 안 됨 → "구매 전환율 높이기"
+- 조직 실행력 저하, 내부 실행 부족, 전략 실행이 안 됨 → "조직 실행력 개선"
+- 신사업 진입, 신규 시장 진출, 시장 확장 전략 → "신시장 진입 전략"
+
+display_keyword와 keyword_group의 차이:
+- display_keyword는 사용자의 의도를 자연스럽게 보여주는 화면용 문구다.
+- keyword_group은 비슷한 검색어를 하나로 묶기 위한 집계용 표준 문구다.
+- 예: 사용자가 "신사업 확장과 리브랜딩 전략"이라고 입력하면
+  display_keyword는 "신사업 확장과 리브랜딩",
+  keyword_group은 "리브랜딩 전략" 또는 핵심 의도에 따라 "신시장 진입 전략"으로 정리한다.
+- 복합 의도일 때는 사용자의 핵심 목적에 더 가까운 하나의 대표 그룹을 선택한다.
 
 주의:
 - JSON만 반환한다.
 - 사용자가 명시하지 않은 산업군은 null로 둔다.
 - must_have는 질의의 핵심 조건만 넣는다.
 - nice_to_have는 참고 조건이다.
+- is_valid_business_query가 false이면 추천 검색을 위한 억지 메타데이터를 만들지 않는다.
+
+비정상 입력 규칙:
+- false일 때 display_keyword와 keyword_group을 절대 만들지 않는다.
 """
 
     user_prompt = f"""
@@ -748,6 +812,30 @@ def recommend_cases_service(
     final_k: int = 5
 ) -> Dict[str, Any]:
     query_meta = analyze_query_with_gpt_mini(query_text)
+
+    is_valid_business_query = query_meta.get("is_valid_business_query", True)
+
+    if isinstance(is_valid_business_query, str):
+        is_valid_business_query = is_valid_business_query.strip().lower() not in [
+            "false", "no", "0", "null", "none"
+        ]
+
+    if is_valid_business_query is False:
+        query_meta["is_valid_business_query"] = False
+        query_meta["display_keyword"] = None
+        query_meta["expanded_query"] = None
+
+        return {
+            "query": query_text,
+            "e5_query": "",
+            "query_meta": query_meta,
+            "result_status": {
+                "status": "NO_RESULT",
+                "message": "입력하신 내용만으로는 비즈니스 문제나 케이스 탐색 의도를 확인하기 어려워요. 해결하고 싶은 상황을 조금 더 구체적으로 적어주세요."
+            },
+            "recommendations": []
+        }
+
     expanded_query = query_meta.get("expanded_query", query_text)
 
     if expanded_query and expanded_query != query_text:
