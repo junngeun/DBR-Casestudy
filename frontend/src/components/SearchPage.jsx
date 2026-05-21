@@ -1039,6 +1039,7 @@ function CaseItem({ item, isSelected, isViewing, isBookmarked, onClick, onToggle
 function CasePanel({ caseData, selectedCases, isSelected, isBookmarked, onToggleSelect, onToggleBookmark, onClose }) {
   const [linkHover, setLinkHover] = useState(false); 
   const [addHover, setAddHover] = useState(false);
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
 
   const toggleBookmark = (e) => {
     e.stopPropagation();
@@ -1052,7 +1053,8 @@ function CasePanel({ caseData, selectedCases, isSelected, isBookmarked, onToggle
   };
 
   return (
-    <div style={styles.panel}>
+    <>
+      <div style={styles.panel}>
       <div style={styles.panelHeader}>
         <h3 style={styles.panelTitle}>{caseData.title}</h3>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -1096,8 +1098,21 @@ function CasePanel({ caseData, selectedCases, isSelected, isBookmarked, onToggle
         )}
 
         <div style={styles.reasonBox}>
-          <p style={styles.reasonTitle}>[ 상세 요약 및 전략 ]</p>
-          <p style={styles.reasonItem}>→ {caseData.summary}</p>
+          <div style={styles.summaryPreviewHeader}>
+            <div>
+              <p style={styles.reasonTitle}>[ 상세 요약 및 전략 ]</p>
+              <p style={styles.summaryPreviewText}>
+                긴 요약문은 별도 창에서 더 편하게 확인할 수 있어요.
+              </p>
+            </div>
+
+            <button
+              style={styles.summaryOpenBtn}
+              onClick={() => setShowSummaryModal(true)}
+            >
+              요약문 바로보기
+            </button>
+          </div>
         </div>
 
         {caseData.prob_def && (
@@ -1131,6 +1146,83 @@ function CasePanel({ caseData, selectedCases, isSelected, isBookmarked, onToggle
         </button>
       </div>
     </div>
+
+      {showSummaryModal && (
+        <CaseSummaryModal
+          caseData={caseData}
+          onClose={() => setShowSummaryModal(false)}
+          onOpenOriginal={openOriginalArticle}
+        />
+      )}
+    </>
+  );
+}
+
+function formatSummaryParagraphs(summary) {
+  if (!summary) return ["등록된 요약문이 없습니다."];
+
+  const normalized = String(summary)
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const sentences = normalized
+    .split(/(?<=[.!?。！？]|다\.|요\.|음\.|됨\.|했다\.|였다\.|한다\.|있다\.|됐다\.)\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+
+  if (sentences.length <= 1) {
+    return [normalized];
+  }
+
+  const paragraphs = [];
+
+  for (let i = 0; i < sentences.length; i += 2) {
+    paragraphs.push(sentences.slice(i, i + 2).join(" "));
+  }
+
+  return paragraphs;
+}
+
+function CaseSummaryModal({ caseData, onClose, onOpenOriginal }) {
+  return (
+    <>
+      <div style={styles.caseSummaryModalOverlay} onClick={onClose} />
+
+      <div style={styles.caseSummaryModal}>
+        <div style={styles.caseSummaryModalHeader}>
+          <div>
+            <p style={styles.caseSummaryModalLabel}>케이스 요약</p>
+            <h3 style={styles.caseSummaryModalTitle}>{caseData.title}</h3>
+            <p style={styles.caseSummaryModalMeta}>
+              {caseData.company || caseData.comp_name || "기업명 미등록"}
+              {caseData.industry ? ` · ${caseData.industry}` : ""}
+              {caseData.date ? ` · ${caseData.date}` : ""}
+            </p>
+          </div>
+
+          <button style={styles.caseSummaryModalCloseBtn} onClick={onClose}>
+            ✕
+          </button>
+        </div>
+
+        <div style={styles.caseSummaryModalBody}>
+          {formatSummaryParagraphs(caseData.summary).map((paragraph, index) => (
+            <p key={index} style={styles.caseSummaryParagraph}>
+              {paragraph}
+            </p>
+          ))}
+        </div>
+
+        <div style={styles.caseSummaryModalFooter}>
+          <button style={styles.caseSummaryModalSubBtn} onClick={onClose}>
+            닫기
+          </button>
+          <button style={styles.caseSummaryModalMainBtn} onClick={onOpenOriginal}>
+            DBR 원문 바로가기 →
+          </button>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -1310,6 +1402,153 @@ const styles = {
     transition: "all 0.2s"
   }, 
   
+
+
+  summaryPreviewHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
+  summaryPreviewText: {
+    fontSize: 13,
+    color: "#666",
+    lineHeight: 1.5,
+    margin: 0,
+  },
+
+  summaryOpenBtn: {
+    padding: "8px 12px",
+    fontSize: 13,
+    fontWeight: 700,
+    color: "#E86F00",
+    background: "#fff",
+    border: "1px solid #E86F00",
+    borderRadius: 2,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    whiteSpace: "nowrap",
+    flexShrink: 0,
+  },
+
+  caseSummaryModalOverlay: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: "rgba(0,0,0,0.45)",
+    zIndex: 1000,
+  },
+
+  caseSummaryModal: {
+    position: "fixed",
+    top: "50%",
+    left: "50%",
+    transform: "translate(-50%, -50%)",
+    width: "min(640px, calc(100vw - 40px))",
+    maxHeight: "78vh",
+    background: "#fff",
+    borderRadius: 16,
+    zIndex: 1100,
+    boxShadow: "0 18px 50px rgba(0,0,0,0.18)",
+    overflow: "hidden",
+    display: "flex",
+    flexDirection: "column",
+  },
+
+  caseSummaryModalHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 16,
+    padding: "22px 24px 18px",
+    borderBottom: "1px solid #f0f0f0",
+  },
+
+  caseSummaryModalLabel: {
+    fontSize: 13,
+    fontWeight: 800,
+    color: "#E86F00",
+    margin: "0 0 8px",
+  },
+
+  caseSummaryModalTitle: {
+    fontSize: 20,
+    fontWeight: 800,
+    color: "#1a1a1a",
+    lineHeight: 1.45,
+    margin: "0 0 8px",
+    letterSpacing: "-0.03em",
+  },
+
+  caseSummaryModalMeta: {
+    fontSize: 13,
+    color: "#999",
+    margin: 0,
+  },
+
+  caseSummaryModalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: "50%",
+    border: "none",
+    background: "#f7f7f7",
+    color: "#999",
+    cursor: "pointer",
+    fontSize: 16,
+    flexShrink: 0,
+  },
+
+  caseSummaryModalBody: {
+    padding: "22px 24px",
+    overflowY: "auto",
+    background: "#fff",
+  },
+
+  caseSummaryParagraph: {
+    fontSize: 15,
+    color: "#333",
+    lineHeight: 1.9,
+    margin: "0 0 18px",
+    letterSpacing: "-0.01em",
+    wordBreak: "keep-all",
+  },
+
+  caseSummaryModalFooter: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 8,
+    padding: "16px 24px",
+    borderTop: "1px solid #f0f0f0",
+    background: "#fafafa",
+  },
+
+  caseSummaryModalSubBtn: {
+    padding: "9px 16px",
+    fontSize: 14,
+    fontWeight: 700,
+    color: "#666",
+    background: "#fff",
+    border: "1px solid #ddd",
+    borderRadius: 4,
+    cursor: "pointer",
+    fontFamily: "inherit",
+  },
+
+  caseSummaryModalMainBtn: {
+    padding: "9px 16px",
+    fontSize: 14,
+    fontWeight: 800,
+    color: "#fff",
+    background: "#E86F00",
+    border: "none",
+    borderRadius: 4,
+    cursor: "pointer",
+    fontFamily: "inherit",
+  },
+
   bottomBar: { position: "fixed", bottom: 0, left: 0, right: 0, background: "#1a1a1a", padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", zIndex: 300 },
   bottomBarText: { fontSize: 15, color: "#fff" },
   bottomBarBtnOutline: { padding: "8px 16px", fontSize: 14, color: "#fff", background: "transparent", border: "1px solid #fff", borderRadius: 2, cursor: "pointer", fontFamily: "inherit" },
