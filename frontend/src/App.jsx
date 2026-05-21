@@ -111,10 +111,15 @@ function App() {
     };
   }, []);
 
+  const navigateTo = (pageName) => {
+    window.scrollTo(0, 0);
+    setPage(pageName);
+  };
+
   const handleAuthSuccess = (loginMember) => {
     setMember(loginMember);
     fetchBookmarkCount();
-    setPage("search");
+    navigateTo("search");
   };
 
   const handleLogout = () => {
@@ -123,17 +128,17 @@ function App() {
 
     setMember(null);
     setBookmarkCount(0);
-    setPage("landing");
+    navigateTo("landing");
   };
 
   const handleBookmarkPageClick = () => {
     if (!member) {
       alert("북마크는 로그인 후 이용할 수 있습니다.");
-      setPage("login");
+      navigateTo("login");
       return;
     }
 
-    setPage("bookmark");
+    navigateTo("bookmark");
   };
 
   return (
@@ -146,7 +151,7 @@ function App() {
       }}>
         <div
           style={{ display: "flex", alignItems: "center", gap: 16, cursor: "pointer" }}
-          onClick={() => setPage("landing")}
+          onClick={() => navigateTo("landing")}
         >
           <span style={{ fontSize: 46, fontWeight: 900, color: "#1a1a1a", letterSpacing: "-3px", fontFamily: "Georgia, 'Times New Roman',serif" }}>DBR</span>
           <div style={{ width: 1, height: 28, background: "#e0e0e0" }} />
@@ -188,13 +193,13 @@ function App() {
             <>
               <button
                 style={{ padding: "8px 16px", fontSize: 14, color: "#666", background: "transparent", border: "1px solid #e0e0e0", borderRadius: 2, cursor: "pointer", fontFamily: "inherit" }}
-                onClick={() => setPage("login")}
+                onClick={() => navigateTo("login")}
               >
                 로그인
               </button>
               <button
                 style={{ padding: "8px 16px", fontSize: 14, color: "#fff", background: "#E86F00", border: "none", borderRadius: 2, cursor: "pointer", fontFamily: "inherit", fontWeight: 500 }}
-                onClick={() => setPage("signup")}
+                onClick={() => navigateTo("signup")}
               >
                 회원가입
               </button>
@@ -205,27 +210,27 @@ function App() {
 
       {page === "login" && (
         <LoginPage
-          onSignup={() => setPage("signup")}
+          onSignup={() => navigateTo("signup")}
           onSuccess={handleAuthSuccess}
         />
       )}
 
       {page === "signup" && (
         <SignupPage
-          onLogin={() => setPage("login")}
+          onLogin={() => navigateTo("login")}
           onSuccess={handleAuthSuccess}
         />
       )}
 
       {page === "landing" && (
         <LandingPage
-          onStart={() => { document.body.style.overflow = ""; setPage("search"); }}
-          onAbout={() => { document.body.style.overflow = ""; setPage("about"); }}
+          onStart={() => { document.body.style.overflow = ""; navigateTo("search"); }}
+          onAbout={() => { document.body.style.overflow = ""; navigateTo("about"); }}
         />
       )}
 
       {page === "about" && (
-        <AboutPage onStart={() => setPage("search")} />
+        <AboutPage onStart={() => navigateTo("search")} />
       )}
 
       {page === "search" && (
@@ -235,7 +240,7 @@ function App() {
         />
       )}
 
-      {page === "bookmark" && <BookmarkPage onBack={() => setPage("search")} />}
+      {page === "bookmark" && <BookmarkPage onBack={() => navigateTo("search")} />}
     </div>
   );
 }

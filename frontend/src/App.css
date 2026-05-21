@@ -187,3 +187,14 @@ input::placeholder {
     border-right-color: var(--border);
   }
 }
+
+.progress-bar {
+  width: 0%;
+  animation: progressFill 18s ease-out forwards;
+}
+
+@keyframes progressFill {
+  0% { width: 0%; }
+  90% { width: 90%; }
+  100% { width: 90%; }
+}
