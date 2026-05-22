@@ -361,6 +361,14 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
   const saveSearchQueryLog = async (searchQuery, queryMeta, recommendations = []) => {
     if (!searchQuery) return null;
 
+    const blockedRawQueryPattern =
+      /(시발|씨발|ㅅㅂ|병신|새끼|개새|좆|존나|ㅈㄴ|꺼져|죽어|대머리새끼|미친|개빡|짜증)/i;
+
+    if (blockedRawQueryPattern.test(searchQuery)) {
+      console.log("검색 로그 저장 제외: 원문에 부적절한 표현 포함", searchQuery);
+      return null;
+    }
+
     const isValidBusinessQuery = queryMeta?.is_valid_business_query !== false;
     const displayKeyword = queryMeta?.display_keyword
       ? String(queryMeta.display_keyword).trim()
@@ -449,6 +457,46 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
         ? `[필터조건: ${filters}] ${query.trim()}`
         : query.trim()
       : filters;
+
+    const rawQueryText = query.trim();
+
+    const blockedRawQueryPattern =
+      /(시발|씨발|ㅅㅂ|병신|새끼|개새|좆|존나|ㅈㄴ|꺼져|죽어|대머리새끼|미친|개빡|짜증)/i;
+
+    if (blockedRawQueryPattern.test(rawQueryText)) {
+      const noticeMessage =
+        "입력하신 문장에 부적절한 표현이 포함되어 있어요. 비즈니스 문제 중심으로 다시 작성해주세요.";
+
+      setResult({
+        problem_summary: noticeMessage,
+        problem_types: [],
+        kpis: [],
+        causes: [],
+        query_idx: null,
+        query_meta: {
+          is_valid_business_query: false,
+          invalid_reason: noticeMessage,
+        },
+        result_status: {
+          status: "NO_RESULT",
+          message: noticeMessage,
+        },
+        cases: [],
+      });
+
+      setInvalidNotice(noticeMessage);
+
+      if (onSearch) {
+        onSearch([]);
+      }
+
+      setTimeout(() => {
+        setInvalidNotice("");
+      }, 3200);
+
+      setHasSearched(true);
+      return;
+    }
 
     setLoading(true);
     setResult(null);
