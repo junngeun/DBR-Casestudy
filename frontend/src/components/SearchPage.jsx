@@ -831,73 +831,75 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
         </div>
       </div>
 
-      <div ref={resultSectionRef} style={styles.splitRow}>
-        <div style={styles.caseListCol}>
-          <div style={styles.card}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-              <p style={styles.cardLabel}>
-                {result ? "유사 케이스 추천 " : "추천 케이스 TOP 5"}
-                {result && <span style={{ color: "#E86F00" }}>5</span>}
-              </p>
-              
-              {result && (
-                <button 
-                  style={styles.infoBtn} 
-                  onClick={() => setShowAnalysisModal(true)}
-                  title="AI 문제 분석 결과 보기"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                  </svg>
-                  <span>AI 분석 결과</span>
-                </button>
-              )}
-            </div>
-
-            <hr style={{ border: "none", borderTop: "2px solid #E86F00", margin: "0 0 12px 0" }} />
-
-            {result?.result_status && (
-              <div style={styles.recommendStatusBox}>
-                <p style={styles.recommendStatusTitle}>
-                  {getStatusLabel(result.result_status.status)}
+      {hasSearched && (
+        <div ref={resultSectionRef} style={styles.splitRow}>
+          <div style={styles.caseListCol}>
+            <div style={styles.card}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <p style={styles.cardLabel}>
+                  {result ? "유사 케이스 추천 " : "추천 케이스 TOP 5"}
+                  {result && <span style={{ color: "#E86F00" }}>5</span>}
                 </p>
-                <p style={styles.recommendStatusMessage}>
-                  {getStatusMessage(
-                    result.result_status.status,
-                    result.result_status.message
-                  )}
-                </p>
+                
+                {result && (
+                  <button 
+                    style={styles.infoBtn} 
+                    onClick={() => setShowAnalysisModal(true)}
+                    title="AI 문제 분석 결과 보기"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                      <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                    <span>AI 분석 결과</span>
+                  </button>
+                )}
               </div>
-            )}
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {cases.map((c) => (
-                <CaseItem
-                  key={c.case_idx || c.id || c.rank}
-                  item={c}
-                  isSelected={!!selectedCases.find((s) => s.title === c.title)}
-                  isViewing={selectedCase?.title === c.title}
-                  isBookmarked={bookmarkedCaseIds.has(String(c.case_idx ?? c.id))}
-                  onClick={() => handleCaseSelect(c, result ? "recommend" : "archive")}
-                  onToggleBookmark={() => handleToggleBookmark(c)}
-                  onRemove={() => setSelectedCases(prev => prev.filter(s => s.title !== c.title))}
-                  onAdd={() => setSelectedCases(prev => prev.length < 3 ? [...prev, c] : prev)}
-                />
-              ))}
+              <hr style={{ border: "none", borderTop: "2px solid #E86F00", margin: "0 0 12px 0" }} />
+
+              {result?.result_status && (
+                <div style={styles.recommendStatusBox}>
+                  <p style={styles.recommendStatusTitle}>
+                    {getStatusLabel(result.result_status.status)}
+                  </p>
+                  <p style={styles.recommendStatusMessage}>
+                    {getStatusMessage(
+                      result.result_status.status,
+                      result.result_status.message
+                    )}
+                  </p>
+                </div>
+              )}
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {cases.map((c) => (
+                  <CaseItem
+                    key={c.case_idx || c.id || c.rank}
+                    item={c}
+                    isSelected={!!selectedCases.find((s) => s.title === c.title)}
+                    isViewing={selectedCase?.title === c.title}
+                    isBookmarked={bookmarkedCaseIds.has(String(c.case_idx ?? c.id))}
+                    onClick={() => handleCaseSelect(c, result ? "recommend" : "archive")}
+                    onToggleBookmark={() => handleToggleBookmark(c)}
+                    onRemove={() => setSelectedCases(prev => prev.filter(s => s.title !== c.title))}
+                    onAdd={() => setSelectedCases(prev => prev.length < 3 ? [...prev, c] : prev)}
+                  />
+                ))}
+              </div>
             </div>
           </div>
+          <div style={styles.mapCol}>
+            <CaseMap
+              cases={mapCases}
+              highlightedIds={recommendedCaseIds}
+              focusCaseId={selectedCase?.case_idx || selectedCase?.id || null}
+              onCaseClick={(caseData) => handleCaseSelect(caseData, "map")}
+            />
+          </div>
         </div>
-        <div style={styles.mapCol}>
-          <CaseMap
-            cases={mapCases}
-            highlightedIds={recommendedCaseIds}
-            focusCaseId={selectedCase?.case_idx || selectedCase?.id || null}
-            onCaseClick={(caseData) => handleCaseSelect(caseData, "map")}
-          />
-        </div>
-      </div>
+      )}
 
       <div style={styles.bottomBrowseSection}>
         {!showAllList ? (
@@ -1583,10 +1585,10 @@ const styles = {
   searchMainCol: { minWidth: 0 },
   popularSideCol: { position: "sticky", top: 96, minWidth: 0 },
   popularRankBoard: { background: "#fff", border: "1px solid #ede8e2", borderRadius: 12, padding: "16px", boxShadow: "0 2px 10px rgba(0,0,0,0.03)", display: "grid", gridTemplateColumns: "1.05fr 1px 0.95fr", gap: 14, minHeight: 520 },
-  popularRankColumn: { minWidth: 0, display: "flex", flexDirection: "column" },
+  popularRankColumn: { minWidth: 0, display: "flex", flexDirection: "column", height: "100%" },
   popularRankDivider: { width: 1, background: "#f0f0f0", alignSelf: "stretch" },
   popularColumnHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 14 },
-  popularCompactList: { display: "flex", flexDirection: "column", gap: 8 },
+  popularCompactList: { display: "flex", flexDirection: "column", gap: 8, flex: 1, justifyContent: "space-between" },
   popularCompactItem: { width: "100%", display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 8px", background: "#fff", border: "1px solid #f0f0f0", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", textAlign: "left", transition: "all 0.2s" },
   popularCompactRank: { fontSize: 14, fontWeight: 800, color: "#E86F00", flexShrink: 0, minWidth: 14, lineHeight: 1.4 },
   popularCompactBody: { flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3 },
