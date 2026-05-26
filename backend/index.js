@@ -2,13 +2,11 @@ const express = require("express");
 const cors = require("cors");
 
 const casesRouter = require("./routes/cases");
-
 const { router: authRouter } = require("./routes/auth");
-
 const logsRouter = require("./routes/logs");
 const popularRouter = require("./routes/popular");
-
 const bookmarksRouter = require("./routes/bookmarks");
+const userRequestRouter = require("./routes/userrequest"); 
 
 require("dotenv").config();
 
@@ -21,14 +19,13 @@ app.use(cors({
 
 app.use(express.json());
 
+// 기존 라우터들
 app.use("/api/cases", casesRouter);
-
 app.use("/api/auth", authRouter);
-
 app.use("/api/logs", logsRouter);
 app.use("/api/popular", popularRouter);
-
 app.use("/api/bookmarks", bookmarksRouter);
+app.use("/api/requests", userRequestRouter);
 
 app.get("/", (req, res) => {
   res.send("Backend server is running");

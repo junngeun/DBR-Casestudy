@@ -6,6 +6,7 @@ import AboutPage from './components/AboutPage'
 import SearchPage from './components/SearchPage'
 import BookmarkPage from './components/BookmarkPage'
 import HistoryPage from './components/HistoryPage'
+import RequestPage from './components/RequestPage'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
 
@@ -154,7 +155,6 @@ function App() {
       navigateTo("login");
       return;
     }
-
     navigateTo("bookmark");
   };
 
@@ -162,7 +162,7 @@ function App() {
     <div>
       <header style={{
         display: "flex", alignItems: "center",
-        padding: "0 150px 0 150px", height: 72, borderBottom: "1px solid #e8e8e8",
+        padding: "0 32px 0 240px", height: 72, borderBottom: "1px solid #e8e8e8",
         background: "#fff", position: "sticky", top: 0, zIndex: 100,
         boxSizing: "border-box",
       }}>
@@ -210,20 +210,35 @@ function App() {
         </div>
 
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-          {/* 히스토리 아이콘 */}
+          
+          {/* 1. 케이스 요청 버튼 */}
           <button
-            onClick={() => navigateTo("history")}
-            style={styles.bookmarkHeaderBtn}
-            title="최근 본 케이스"
+            onClick={() => navigateTo("request")}
+            style={styles.iconHeaderBtn}
+            title="신규 케이스 요청"
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="12 6 12 12 16 14" />
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="10" y1="10" x2="14" y2="10"></line>
             </svg>
           </button>
-          {/* 북마크 아이콘 */}
+
+          {/* 2. 최근 본 케이스 버튼 */}
           <button
-            style={styles.bookmarkHeaderBtn}
+            onClick={() => navigateTo("history")}
+            style={styles.iconHeaderBtn}
+            title="최근 본 케이스"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+          </button>
+
+          {/* 3. 북마크 버튼 */}
+          <button
+            style={styles.iconHeaderBtn}
             onClick={handleBookmarkPageClick}
             title="북마크"
           >
@@ -238,34 +253,36 @@ function App() {
             )}
           </button>
 
-          {member ? (
-            <>
-              <span style={{ fontSize: 14, color: "#666", marginRight: 6 }}>
-                {member.nickname || member.email}님
-              </span>
-              <button
-                style={{ padding: "8px 16px", fontSize: 14, color: "#666", background: "transparent", border: "1px solid #e0e0e0", borderRadius: 2, cursor: "pointer", fontFamily: "inherit" }}
-                onClick={handleLogout}
-              >
-                로그아웃
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                style={{ padding: "8px 16px", fontSize: 14, color: "#666", background: "transparent", border: "1px solid #e0e0e0", borderRadius: 2, cursor: "pointer", fontFamily: "inherit" }}
-                onClick={() => navigateTo("login")}
-              >
-                로그인
-              </button>
-              <button
-                style={{ padding: "8px 16px", fontSize: 14, color: "#fff", background: "#E86F00", border: "none", borderRadius: 2, cursor: "pointer", fontFamily: "inherit", fontWeight: 500 }}
-                onClick={() => navigateTo("signup")}
-              >
-                회원가입
-              </button>
-            </>
-          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: 8 }}>
+            {member ? (
+              <>
+                <span style={{ fontSize: 14, color: "#666", marginRight: 6 }}>
+                  {member.nickname || member.email}님
+                </span>
+                <button
+                  style={{ padding: "8px 16px", fontSize: 14, color: "#666", background: "transparent", border: "1px solid #e0e0e0", borderRadius: 2, cursor: "pointer", fontFamily: "inherit" }}
+                  onClick={handleLogout}
+                >
+                  로그아웃
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  style={{ padding: "8px 16px", fontSize: 14, color: "#666", background: "transparent", border: "1px solid #e0e0e0", borderRadius: 2, cursor: "pointer", fontFamily: "inherit" }}
+                  onClick={() => navigateTo("login")}
+                >
+                  로그인
+                </button>
+                <button
+                  style={{ padding: "8px 16px", fontSize: 14, color: "#fff", background: "#E86F00", border: "none", borderRadius: 2, cursor: "pointer", fontFamily: "inherit", fontWeight: 500 }}
+                  onClick={() => navigateTo("signup")}
+                >
+                  회원가입
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </header>
 
@@ -302,13 +319,14 @@ function App() {
       )}
 
       {page === "bookmark" && <BookmarkPage onBack={goBack} />}
-      {page === "history" && <HistoryPage onBack={() => navigateTo("search")} />}
+      {page === "history" && <HistoryPage onBack={goBack} />}
+      {page === "request" && <RequestPage onBack={goBack} />}
     </div>
   );
 }
 
 const styles = {
-  bookmarkHeaderBtn: {
+  iconHeaderBtn: {
     position: "relative",
     background: "#fff",
     border: "1px solid #e0e0e0",
