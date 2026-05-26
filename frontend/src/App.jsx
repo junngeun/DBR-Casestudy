@@ -10,6 +10,8 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000
 
 function App() {
   const [page, setPage] = useState("landing");
+  const [history, setHistory] = useState([]); 
+
   const [searchedCases, setSearchedCases] = useState([]);
   const [member, setMember] = useState(null);
   const [bookmarkCount, setBookmarkCount] = useState(0);
@@ -112,8 +114,21 @@ function App() {
   }, []);
 
   const navigateTo = (pageName) => {
+    if (page === pageName) return; 
     window.scrollTo(0, 0);
+    setHistory((prev) => [...prev, page]); 
     setPage(pageName);
+  };
+
+  const goBack = () => {
+    if (history.length === 0) return; 
+
+    const newHistory = [...history];
+    const prevPage = newHistory.pop(); 
+
+    setHistory(newHistory); 
+    setPage(prevPage); 
+    window.scrollTo(0, 0);
   };
 
   const handleAuthSuccess = (loginMember) => {
@@ -128,6 +143,7 @@ function App() {
 
     setMember(null);
     setBookmarkCount(0);
+    setHistory([]); 
     navigateTo("landing");
   };
 
@@ -149,9 +165,41 @@ function App() {
         background: "#fff", position: "sticky", top: 0, zIndex: 100,
         boxSizing: "border-box",
       }}>
+        
+        {page !== "landing" && (
+          <button
+            onClick={() => {
+              setHistory([]); 
+              setPage("landing"); 
+              window.scrollTo(0, 0); 
+            }}
+            style={{
+              background: "transparent", 
+              border: "none", 
+              cursor: "pointer",
+              marginRight: 16, 
+              padding: "8px 12px", 
+              display: "flex", 
+              alignItems: "center",
+              fontSize: 15, 
+              fontWeight: 600, 
+              color: "#1a1a1a",
+              fontFamily: "'Pretendard', 'Apple SD Gothic Neo', sans-serif",
+              letterSpacing: "-0.02em"
+            }}
+            title="첫 화면으로 돌아가기"
+          >
+            ← 메인으로
+          </button>
+        )}
+
         <div
           style={{ display: "flex", alignItems: "center", gap: 16, cursor: "pointer" }}
-          onClick={() => navigateTo("landing")}
+          onClick={() => {
+            setHistory([]);
+            setPage("landing");
+            window.scrollTo(0, 0);
+          }}
         >
           <span style={{ fontSize: 46, fontWeight: 900, color: "#1a1a1a", letterSpacing: "-3px", fontFamily: "Georgia, 'Times New Roman',serif" }}>DBR</span>
           <div style={{ width: 1, height: 28, background: "#e0e0e0" }} />
@@ -240,7 +288,7 @@ function App() {
         />
       )}
 
-      {page === "bookmark" && <BookmarkPage onBack={() => navigateTo("search")} />}
+      {page === "bookmark" && <BookmarkPage onBack={goBack} />}
     </div>
   );
 }
