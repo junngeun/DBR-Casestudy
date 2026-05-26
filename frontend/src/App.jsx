@@ -5,6 +5,7 @@ import LandingPage from './components/LandingPage'
 import AboutPage from './components/AboutPage'
 import SearchPage from './components/SearchPage'
 import BookmarkPage from './components/BookmarkPage'
+import HistoryPage from './components/HistoryPage'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
 
@@ -209,6 +210,18 @@ function App() {
         </div>
 
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+          {/* 히스토리 아이콘 */}
+          <button
+            onClick={() => navigateTo("history")}
+            style={styles.bookmarkHeaderBtn}
+            title="최근 본 케이스"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+          </button>
+          {/* 북마크 아이콘 */}
           <button
             style={styles.bookmarkHeaderBtn}
             onClick={handleBookmarkPageClick}
@@ -289,6 +302,7 @@ function App() {
       )}
 
       {page === "bookmark" && <BookmarkPage onBack={goBack} />}
+      {page === "history" && <HistoryPage onBack={() => navigateTo("search")} />}
     </div>
   );
 }
