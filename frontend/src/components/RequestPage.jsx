@@ -10,16 +10,17 @@ export default function RequestPage({ onBack }) {
   const [isPrivate, setIsPrivate] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState("likes");
   const [requests, setRequests] = useState([]);
 
-  // 데이터 목록 불러오기 (로그인 유저의 공감 여부 포함하여 가져옴)
+  const member = JSON.parse(localStorage.getItem("member"));
+
+  // 데이터 목록 불러오기
   const fetchRequests = async () => {
     try {
-      const member = JSON.parse(localStorage.getItem("member"));
       const url = member 
         ? `${API_BASE_URL}/api/requests?member_idx=${member.member_idx}` 
         : `${API_BASE_URL}/api/requests`;
-      
       const res = await fetch(url);
       const data = await res.json();
       if (data.success) {
@@ -37,6 +38,7 @@ export default function RequestPage({ onBack }) {
   // 요청 등록
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!member) return alert("로그인 후 이용 가능합니다.");
     if (!topic.trim() || !content.trim()) {
       alert("요청하실 주제와 상세 내용을 입력해주세요.");
       return;
@@ -47,16 +49,22 @@ export default function RequestPage({ onBack }) {
       const res = await fetch(`${API_BASE_URL}/api/requests`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic, industry, content, is_private: isPrivate })
+        body: JSON.stringify({ 
+          topic, industry, content, 
+          is_private: isPrivate, 
+          member_idx: member.member_idx 
+        })
       });
 
       if (res.ok) {
         alert("케이스 요청이 게시판에 등록되었습니다!");
         setTopic(""); setIndustry(""); setContent(""); setIsPrivate(false);
         fetchRequests();
+      } else {
+        alert("등록 중 오류가 발생했습니다.");
       }
     } catch (err) {
-      alert("등록 중 오류가 발생했습니다.");
+      alert("서버 연결 오류");
     } finally {
       setIsSubmitting(false);
     }
@@ -64,32 +72,46 @@ export default function RequestPage({ onBack }) {
 
   // 좋아요 토글 기능
   const handleLike = async (idx) => {
-    const member = JSON.parse(localStorage.getItem("member"));
-    if (!member) {
-      alert("로그인 후 이용 가능합니다.");
-      return;
-    }
-
+    if (!member) return alert("로그인 후 이용 가능합니다.");
     try {
       const res = await fetch(`${API_BASE_URL}/api/requests/${idx}/like`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ member_idx: member.member_idx })
       });
-
-      if (!res.ok) {
-        console.error("좋아요 처리 실패");
-      }
+      if (res.ok) fetchRequests();
     } catch (err) {
       console.error("좋아요 처리 실패:", err);
     }
   };
 
-  const filteredRequests = requests.filter(req => 
-    req.topic.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    req.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    req.industry.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // 삭제 기능
+  const handleDelete = async (idx) => {
+    if (!confirm("정말 삭제하시겠습니까?")) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/requests/${idx}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ member_idx: member.member_idx })
+      });
+      if (res.ok) fetchRequests();
+      else alert("삭제 권한이 없습니다.");
+    } catch (err) {
+      console.error("삭제 실패:", err);
+    }
+  };
+
+  const processedRequests = [...requests]
+    .filter(req => 
+      req.topic.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      req.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      req.industry.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .sort((a, b) => {
+      if (sortBy === "likes") return b.likes - a.likes;
+      if (sortBy === "date") return new Date(b.created_at) - new Date(a.created_at);
+      return 0;
+    });
 
   return (
     <div style={styles.page}>
@@ -116,7 +138,7 @@ export default function RequestPage({ onBack }) {
 
             <div style={styles.inputGroup}>
               <label style={styles.label}>상세 내용 (필수)</label>
-              <textarea style={styles.textarea} placeholder="예: 초기 마케팅 예산이 부족한 상황에서 어떻게 1만 명의 유저를 확보했는지 구체적인 채널 전략이 궁금합니다." value={content} onChange={(e) => setContent(e.target.value)} />
+              <textarea style={styles.textarea} placeholder="예: 구체적인 채널 전략이 궁금합니다." value={content} onChange={(e) => setContent(e.target.value)} />
             </div>
 
             <div style={styles.toggleWrapper} onClick={() => setIsPrivate(!isPrivate)}>
@@ -133,12 +155,16 @@ export default function RequestPage({ onBack }) {
         </div>
 
         <div style={styles.rightSection}>
-          <div style={styles.searchWrapper}>
-            <input style={styles.searchInput} placeholder="주제나 산업군을 검색해보세요..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+          <div style={styles.controls}>
+            <input style={{...styles.searchInput, flex: 1}} placeholder="검색" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+            <select style={styles.sortSelect} value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+              <option value="likes">공감순</option>
+              <option value="date">최신순</option>
+            </select>
           </div>
 
           <div style={styles.feedList}>
-            {filteredRequests.sort((a, b) => b.likes - a.likes).map(req => (
+            {processedRequests.map(req => (
               <div key={req.request_idx} style={styles.feedCard}>
                 <div style={styles.feedCardTop}>
                   <span style={styles.feedBadge}>{req.industry}</span>
@@ -147,35 +173,20 @@ export default function RequestPage({ onBack }) {
                 <h4 style={styles.feedTopic}>{req.topic}</h4>
                 <p style={styles.feedContent}>{req.content}</p>
                 <div style={styles.feedCardBottom}>
-                  {/* === 클릭 시 주황 배경에 흰 글씨로 반전되는 버튼 === */}
-                <button 
-                  onClick={() => {
-                    setRequests(prev => prev.map(item => {
-                      if (item.request_idx !== req.request_idx) return item;
-
-                      const isLiked = item.is_liked === true || item.is_liked === 1 || item.is_liked === "1";
-
-                      return {
-                        ...item,
-                        is_liked: !isLiked,
-                        likes: isLiked ? item.likes - 1 : item.likes + 1
-                      };
-                    }));
-
-                    handleLike(req.request_idx);
-                  }}
-                  style={{ 
-                    ...styles.likeBtn,
-                    backgroundColor: (req.is_liked === true || req.is_liked === 1 || req.is_liked === "1") ? "#E86F00" : "#fff",
-                    color: (req.is_liked === true || req.is_liked === 1 || req.is_liked === "1") ? "#fff" : "#666",
-                    border: (req.is_liked === true || req.is_liked === 1 || req.is_liked === "1") 
-                      ? "1px solid #E86F00" 
-                      : "1px solid #e0e0e0",
-                    outline: "none"
-                  }}
-                >
-                  공감 {req.likes}
-                </button>
+                  {member && Number(member.member_idx) === Number(req.member_idx) && (
+                    <button onClick={() => handleDelete(req.request_idx)} style={styles.deleteBtn}>삭제</button>
+                  )}
+                  <button 
+                    onClick={() => handleLike(req.request_idx)}
+                    style={{ 
+                      ...styles.likeBtn,
+                      backgroundColor: req.is_liked ? "#E86F00" : "#fff",
+                      borderColor: "#E86F00",
+                      color: req.is_liked ? "#fff" : "#E86F00"
+                    }}
+                  >
+                    공감 {req.likes}
+                  </button>
                 </div>
               </div>
             ))}
@@ -205,8 +216,9 @@ const styles = {
   toggleText: { fontSize: 14, fontWeight: 600, color: "#444" },
   submitBtn: { marginTop: 10, padding: "16px", fontSize: 15, fontWeight: 700, color: "#fff", background: "#E86F00", border: "none", borderRadius: 6, cursor: "pointer" },
   rightSection: { flex: "1 1 55%", display: "flex", flexDirection: "column", gap: 16, maxHeight: "calc(100vh - 150px)" },
-  searchWrapper: { position: "relative", width: "100%" },
-  searchInput: { width: "100%", padding: "14px 16px", fontSize: 14, border: "1px solid #e0e0e0", borderRadius: 8, outline: "none" },
+  controls: { display: "flex", gap: 8, marginBottom: 8 },
+  sortSelect: { padding: "14px", border: "1px solid #e0e0e0", borderRadius: 8, background: "#fff", outline: "none", cursor: "pointer", fontSize: 14 },
+  searchInput: { padding: "14px 16px", fontSize: 14, border: "1px solid #e0e0e0", borderRadius: 8, outline: "none" },
   feedList: { display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" },
   feedCard: { background: "#fff", border: "1px solid #ede8e2", borderRadius: 12, padding: "24px" },
   feedCardTop: { display: "flex", justifyContent: "space-between", marginBottom: 12 },
@@ -215,18 +227,6 @@ const styles = {
   feedTopic: { fontSize: 16, fontWeight: 700, color: "#1a1a1a", marginBottom: 10 },
   feedContent: { fontSize: 14, color: "#555", lineHeight: 1.6 },
   feedCardBottom: { display: "flex", justifyContent: "flex-end", borderTop: "1px solid #f0f0f0", paddingTop: 16 },
-  
-  likeBtn: { 
-    background: "#fff", 
-    border: "1px solid #e0e0e0", 
-    borderRadius: 6, 
-    padding: "6px 14px", 
-    fontSize: 13, 
-    fontWeight: 700, 
-    cursor: "pointer", 
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    transition: "all 0.2s ease-in-out" 
-  }
+  likeBtn: { background: "#fff", border: "1px solid #E86F00", borderRadius: 6, padding: "6px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "0.2s" },
+  deleteBtn: { background: "#fff", border: "1px solid #ff4d4f", color: "#ff4d4f", borderRadius: 6, padding: "6px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginRight: 8 }
 };
