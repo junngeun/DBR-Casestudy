@@ -127,6 +127,44 @@ class RecommendResponse(BaseModel):
     recommendations: List[RecommendationItem]
 
 
+class PersonalStrategyCase(BaseModel):
+    case_idx: int
+
+    title: Optional[str] = None
+    summary: Optional[str] = None
+    comp_name: Optional[str] = None
+    industry: Optional[str] = None
+
+    prob_main: Optional[str] = None
+    prob_keyword: Optional[str] = None
+    prob_def: Optional[str] = None
+    sol_type: Optional[str] = None
+    sol_detail: Optional[str] = None
+    perf_type: Optional[str] = None
+    perf_dir: Optional[str] = None
+
+    reco_reason: Optional[str] = None
+    condition_match: Optional[str] = None
+    final_score: Optional[float] = None
+
+
+class PersonalStrategiesRequest(BaseModel):
+    user_context: str = Field(..., description="사용자가 자유롭게 입력한 현재 상황")
+    cases: List[PersonalStrategyCase] = Field(..., description="개인화 전략을 생성할 추천 케이스 목록")
+
+
+class PersonalStrategyItem(BaseModel):
+    case_idx: int
+    personal_strategy: str
+    strategy_status: str
+    based_on_case_title: Optional[str] = None
+
+
+class PersonalStrategiesResponse(BaseModel):
+    success: bool
+    strategies: List[PersonalStrategyItem]
+
+
 # ============================================================
 # 4. 공통 유틸
 # ============================================================
@@ -185,6 +223,96 @@ def normalize_condition(value: Any) -> str:
     value = safe_str(value).lower().strip()
     allowed = ["full", "mostly", "partial", "weak", "none", "not_reranked"]
     return value if value in allowed else "partial"
+
+
+class PersonalContextValidationError(ValueError):
+    """사용자 상황 입력값 검증 실패 예외"""
+    pass
+
+
+BLOCKED_INPUT_PATTERN = re.compile(
+    r"(시발|씨발|ㅅㅂ|병신|새끼|개새|좆|존나|ㅈㄴ|꺼져|죽어|"
+    r"대머리새끼|미친|개빡|짜증|혐오|죽이고|죽여|fuck|shit)",
+    re.IGNORECASE
+)
+
+MEANINGLESS_INPUT_PATTERN = re.compile(
+    r"^(test|asdf|qwer|zxcv|ㅋㅋ+|ㅎㅎ+|ㅠㅠ+|ㅜㅜ+|아무거나|몰라|모름|안녕|뭐해|해줘|알아서\s*해줘)$",
+    re.IGNORECASE
+)
+
+PROMPT_INJECTION_PATTERN = re.compile(
+    r"(ignore\s+previous|ignore\s+all|system\s*prompt|developer\s*message|"
+    r"프롬프트|시스템\s*지시|이전\s*지시|무시하고|규칙\s*무시|"
+    r"api[_\s-]*key|비밀번호|password|\.env|환경변수|json만|관리자\s*권한)",
+    re.IGNORECASE
+)
+
+BUSINESS_CONTEXT_KEYWORDS = [
+    "고객", "이탈", "재방문", "전환", "구매", "가입", "유입", "유저", "사용자",
+    "마케팅", "CRM", "브랜드", "캠페인", "광고", "콘텐츠", "리텐션",
+    "매출", "수익", "비용", "예산", "인력", "리소스", "개발", "운영", "효율",
+    "서비스", "제품", "앱", "플랫폼", "커머스", "리테일", "스타트업", "신사업", "시장",
+    "데이터", "분석", "실험", "개선", "문제", "전략", "방향", "제약", "성과", "만족도", "UX"
+]
+
+
+def normalize_user_context_text(user_context: str) -> str:
+    """상황 입력값의 공백과 제어문자를 정리한다."""
+    text = safe_str(user_context)
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = re.sub(r"[\t\x00-\x08\x0b\x0c\x0e-\x1f]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r"[ ]{2,}", " ", text)
+    return text.strip()
+
+
+def validate_personal_context(user_context: str) -> str:
+    """
+    추천 케이스 적용 전략 입력창 전용 검증.
+    검색창은 '케이스 탐색 의도'를 보지만, 이 입력창은 '현재 상황 설명으로 쓸 수 있는지'를 본다.
+    """
+    text = normalize_user_context_text(user_context)
+    compact = re.sub(r"\s+", "", text)
+
+    if not text:
+        raise PersonalContextValidationError("현재 상황을 먼저 입력해주세요.")
+
+    if len(compact) < 10:
+        raise PersonalContextValidationError(
+            "현재 상황을 조금 더 구체적으로 입력해주세요. 맡은 역할, 해결해야 할 문제, 예산·인력 같은 제약 조건을 함께 적으면 좋아요."
+        )
+
+    if len(text) > 1200:
+        raise PersonalContextValidationError("입력 내용이 너무 깁니다. 현재 역할, 문제 상황, 제약 조건 중심으로 1~5문장 정도로 줄여주세요.")
+
+    if BLOCKED_INPUT_PATTERN.search(text):
+        raise PersonalContextValidationError("현재 상황을 비즈니스 문제 중심으로 다시 작성해주세요. 비속어나 공격적인 표현은 사용할 수 없습니다.")
+
+    if PROMPT_INJECTION_PATTERN.search(text):
+        raise PersonalContextValidationError("현재 상황 입력에는 역할, 문제 상황, 제약 조건만 적어주세요. 시스템 지시나 프롬프트 변경 요청은 사용할 수 없습니다.")
+
+    normalized_lower = compact.lower()
+    if MEANINGLESS_INPUT_PATTERN.match(normalized_lower):
+        raise PersonalContextValidationError("현재 상황을 비즈니스 문제 중심으로 다시 작성해주세요. 예: 맡은 역할, 해결해야 할 문제, 예산·인력 같은 제약 조건")
+
+    # 같은 글자나 기호 반복 입력 방지: ㅋㅋㅋㅋ, ㅎㅎㅎㅎ, aaaaa, 11111 등
+    if re.fullmatch(r"(.)\1{4,}", compact):
+        raise PersonalContextValidationError("현재 상황을 비즈니스 문제 중심으로 다시 작성해주세요.")
+
+    # 한글/영문/숫자 없이 기호만 있는 입력 방지
+    if not re.search(r"[가-힣a-zA-Z0-9]", text):
+        raise PersonalContextValidationError("현재 상황을 문장으로 입력해주세요.")
+
+    has_business_context = any(keyword.lower() in text.lower() for keyword in BUSINESS_CONTEXT_KEYWORDS)
+
+    # 충분히 긴 문장은 자유 서술로 허용하되, 너무 짧고 비즈니스 맥락이 없으면 안내한다.
+    if not has_business_context and len(compact) < 25:
+        raise PersonalContextValidationError(
+            "현재 상황을 비즈니스 문제 중심으로 입력해주세요. 예: 맡은 역할, 해결해야 할 문제, 예산·인력 같은 제약 조건"
+        )
+
+    return text
 
 
 # ============================================================
@@ -945,8 +1073,237 @@ def recommend_cases_service(
     }
 
 
+
 # ============================================================
-# 11. API Router
+# 11. 케이스 기반 개인화 전략
+# ============================================================
+
+def get_personal_strategy_status(case_item: Dict[str, Any]) -> str:
+    condition = normalize_condition(case_item.get("condition_match", "partial"))
+
+    try:
+        final_score = float(case_item.get("final_score", 0.0) or 0.0)
+    except Exception:
+        final_score = 0.0
+
+    if condition in ["full", "mostly"] or final_score >= 0.65:
+        return "generated"
+
+    if condition == "partial" or (0.45 <= final_score < 0.65):
+        return "reference"
+
+    return "limited"
+
+
+def make_limited_personal_strategy(case_item: Dict[str, Any]) -> str:
+    title = safe_str(case_item.get("title")) or "이 케이스"
+
+    return (
+        f"{title}는 현재 사용자 상황과 직접적으로 연결되는 근거가 충분하지 않아 "
+        "케이스 기반 개인화 전략을 생성하지 않았습니다. "
+        "더 설득력 있는 전략을 얻으려면 해결하고 싶은 문제 상황이나 적용하고 싶은 맥락을 조금 더 구체적으로 입력하는 것이 좋습니다."
+    )
+
+
+def build_personal_strategy_case_brief(case_item: Dict[str, Any], strategy_status: str) -> Dict[str, Any]:
+    return {
+        "case_idx": int(case_item.get("case_idx")),
+        "strategy_status": strategy_status,
+        "title": safe_str(case_item.get("title"))[:180],
+        "comp_name": safe_str(case_item.get("comp_name"))[:80],
+        "industry": safe_str(case_item.get("industry"))[:80],
+        "prob_main": safe_str(case_item.get("prob_main"))[:50],
+        "prob_keyword": safe_str(case_item.get("prob_keyword"))[:80],
+        "sol_type": safe_str(case_item.get("sol_type"))[:80],
+        "prob_def": safe_str(case_item.get("prob_def"))[:420],
+        "sol_detail": safe_str(case_item.get("sol_detail"))[:520],
+        "summary": safe_str(case_item.get("summary"))[:900],
+        "reco_reason": safe_str(case_item.get("reco_reason"))[:420],
+        "condition_match": normalize_condition(case_item.get("condition_match", "partial")),
+        "final_score": float(case_item.get("final_score", 0.0) or 0.0),
+    }
+
+
+def generate_personal_strategies_with_gpt(
+    user_context: str,
+    cases: List[Dict[str, Any]],
+    max_retries: int = 2
+) -> Dict[int, str]:
+    case_briefs = [
+        build_personal_strategy_case_brief(
+            case_item=case_item,
+            strategy_status=get_personal_strategy_status(case_item)
+        )
+        for case_item in cases
+    ]
+
+    valid_case_ids = {int(case_item["case_idx"]) for case_item in case_briefs}
+
+    system_prompt = """
+너는 DBR Case Atlas 서비스의 '케이스 기반 개인화 전략' 작성자다.
+
+역할:
+사용자의 현재 상황을 바탕으로, 제공된 DBR 추천 케이스 각각을 어떻게 참고할 수 있는지 개인화된 전략 문장으로 작성한다.
+
+가장 중요한 원칙:
+1. 반드시 제공된 케이스 정보 안에서만 작성한다.
+2. 제공된 케이스의 summary, prob_def, sol_detail, reco_reason에 없는 전략, 채널, 도구, 수치, 성과를 새로 만들지 않는다.
+3. 사용자의 현재 상황은 전략의 표현 수준과 적용 방향을 조정하는 데만 사용한다.
+4. 사용자가 입력하지 않은 직무, 연차, 예산, 조직 상황을 추측하지 않는다.
+5. 각 case_idx는 해당 케이스 하나만 근거로 작성한다. 다른 케이스의 내용을 섞지 않는다.
+6. 케이스와 사용자 상황의 연결이 약하면 억지로 직접 적용 전략처럼 쓰지 않는다.
+7. 반드시 JSON만 반환한다.
+
+strategy_status별 작성 규칙:
+- generated:
+  사용자 상황과 케이스의 문제 정의/해결 전략이 충분히 연결된다. 이 경우 "사용자의 상황에서는 이 케이스에서처럼..." 형태로 적용 방향을 제안한다.
+- reference:
+  직접 적용보다는 참고 관점이다. 이 경우 반드시 "직접 적용보다는 참고 관점에서" 또는 "완전히 같은 상황은 아니지만"처럼 한계를 부드럽게 먼저 밝힌다.
+- limited:
+  원칙적으로 입력되지 않는다. 만약 포함되면 개인화 전략을 만들지 말고 적용 한계를 안내한다.
+
+문장 작성 규칙:
+1. 각 personal_strategy는 하나의 자연스러운 문단으로 작성한다.
+2. 3~5문장으로 작성한다.
+3. "~합니다"체를 사용한다.
+4. 너무 보고서처럼 딱딱하게 쓰지 않는다.
+5. 사용자가 바로 이해할 수 있게 구체적으로 쓰되, 케이스에 없는 실행 수단을 만들지 않는다.
+6. "추천 케이스를 기준으로 보면", "이 케이스의 해결 방식에 비춰보면", "제공된 사례를 바탕으로 보면" 같은 근거 표현을 사용한다.
+7. 낮은 관련성을 억지로 포장하지 않는다.
+8. "반드시", "무조건", "성공할 수 있다"처럼 과도한 단정은 피한다.
+
+반환 형식:
+{
+  "strategies": [
+    {
+      "case_idx": 1,
+      "personal_strategy": "케이스 기반 개인화 전략 문단"
+    }
+  ]
+}
+"""
+
+    user_prompt = f"""
+사용자 현재 상황:
+{user_context}
+
+추천 케이스 목록:
+{json.dumps(case_briefs, ensure_ascii=False, indent=2)}
+
+작업:
+1. 각 케이스의 summary, prob_def, sol_detail, reco_reason만 근거로 개인화 전략을 작성하라.
+2. 사용자의 현재 상황을 반영하되, 케이스에 없는 전략은 만들지 마라.
+3. strategy_status가 reference인 케이스는 직접 적용이 아니라 참고 관점임을 문장 안에 밝혀라.
+4. 각 case_idx별로 3~5문장짜리 하나의 문단을 작성하라.
+5. 제공된 case_idx만 사용하라.
+6. JSON 외 설명은 출력하지 마라.
+"""
+
+    last_error = None
+
+    for attempt in range(max_retries + 1):
+        try:
+            parsed = call_gpt_json(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                max_completion_tokens=3000,
+                temperature=0.0
+            )
+
+            strategies = parsed.get("strategies", [])
+            result_map: Dict[int, str] = {}
+
+            for item in strategies:
+                case_idx = int(item.get("case_idx"))
+                if case_idx not in valid_case_ids:
+                    continue
+
+                personal_strategy = safe_str(item.get("personal_strategy", "")).strip()
+                if not personal_strategy:
+                    continue
+
+                result_map[case_idx] = personal_strategy
+
+            if not result_map:
+                raise ValueError("GPT 개인화 전략 결과에 유효한 case_idx가 없습니다.")
+
+            return result_map
+
+        except Exception as e:
+            last_error = e
+            print(f"개인화 전략 GPT 호출 실패 {attempt + 1}/{max_retries + 1}: {e}")
+            time.sleep(1)
+
+    raise RuntimeError(f"개인화 전략 GPT 최종 실패: {last_error}")
+
+
+def personal_strategies_service(user_context: str, cases: List[PersonalStrategyCase]) -> Dict[str, Any]:
+    user_context = validate_personal_context(user_context)
+
+    if not cases:
+        raise ValueError("적용 방향을 생성할 추천 케이스가 없습니다.")
+
+    case_dicts = [case_item.model_dump() for case_item in cases]
+
+    limited_results: List[Dict[str, Any]] = []
+    gpt_target_cases: List[Dict[str, Any]] = []
+
+    for case_item in case_dicts:
+        strategy_status = get_personal_strategy_status(case_item)
+
+        if strategy_status == "limited":
+            limited_results.append({
+                "case_idx": int(case_item.get("case_idx")),
+                "personal_strategy": make_limited_personal_strategy(case_item),
+                "strategy_status": "limited",
+                "based_on_case_title": case_item.get("title")
+            })
+        else:
+            case_item["strategy_status"] = strategy_status
+            gpt_target_cases.append(case_item)
+
+    gpt_strategy_map: Dict[int, str] = {}
+
+    if gpt_target_cases:
+        gpt_strategy_map = generate_personal_strategies_with_gpt(
+            user_context=user_context,
+            cases=gpt_target_cases
+        )
+
+    generated_results: List[Dict[str, Any]] = []
+
+    for case_item in gpt_target_cases:
+        case_idx = int(case_item.get("case_idx"))
+        strategy_status = get_personal_strategy_status(case_item)
+
+        generated_results.append({
+            "case_idx": case_idx,
+            "personal_strategy": gpt_strategy_map.get(
+                case_idx,
+                make_limited_personal_strategy(case_item)
+            ),
+            "strategy_status": strategy_status if case_idx in gpt_strategy_map else "limited",
+            "based_on_case_title": case_item.get("title")
+        })
+
+    order_map = {
+        int(case_item.get("case_idx")): index
+        for index, case_item in enumerate(case_dicts)
+    }
+
+    strategies = generated_results + limited_results
+    strategies = sorted(
+        strategies,
+        key=lambda item: order_map.get(int(item["case_idx"]), 9999)
+    )
+
+    return {
+        "success": True,
+        "strategies": strategies
+    }
+
+# ============================================================
+# 12. API Router
 # ============================================================
 
 @app.get("/")
@@ -977,3 +1334,23 @@ def recommend_api(request: RecommendRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/personal-strategies", response_model=PersonalStrategiesResponse)
+def personal_strategies_api(request: PersonalStrategiesRequest):
+    try:
+        result = personal_strategies_service(
+            user_context=request.user_context,
+            cases=request.cases
+        )
+        return result
+
+    except PersonalContextValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+

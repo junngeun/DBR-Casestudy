@@ -65,6 +65,11 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
   const [selectedKeyword, setSelectedKeyword] = useState(null);
   
   const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+  const [showPersonalStrategyModal, setShowPersonalStrategyModal] = useState(false);
+  const [personalContext, setPersonalContext] = useState("");
+  const [personalStrategyLoading, setPersonalStrategyLoading] = useState(false);
+  const [personalStrategyError, setPersonalStrategyError] = useState(null);
+  const [personalStrategyToast, setPersonalStrategyToast] = useState("");
 
   const [showAllList, setShowAllList] = useState(false);
   const [visibleCount, setVisibleCount] = useState(10);
@@ -72,6 +77,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
   const [selectedCase, setSelectedCase] = useState(null);
   const [selectedCases, setSelectedCases] = useState([]);
   const [showCompare, setShowCompare] = useState(false);
+  const [showBottomExport, setShowBottomExport] = useState(false);
   const [textareaFocused, setTextareaFocused] = useState(false);
   const [btnHover, setBtnHover] = useState(false);
   const [clearBtnHover, setClearBtnHover] = useState(false);
@@ -638,6 +644,8 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
         final_score: item.final_score,
         reco_reason: item.reco_reason,
         reason_check: item.reason_check,
+        personal_strategy: null,
+        personal_strategy_status: null,
       }));
 
       setResult({
@@ -710,6 +718,105 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
     });
   };
 
+  const handleCreatePersonalStrategies = async () => {
+    const trimmedContext = personalContext.trim();
+
+    if (!trimmedContext) {
+      setPersonalStrategyError("현재 상황을 먼저 입력해주세요.");
+      return;
+    }
+
+    if (!result?.cases || result.cases.length === 0) {
+      setPersonalStrategyError("맞춤 전략을 생성할 추천 케이스가 없습니다.");
+      return;
+    }
+
+    setPersonalStrategyLoading(true);
+    setPersonalStrategyError(null);
+
+    try {
+      const requestBody = {
+        user_context: trimmedContext,
+        cases: result.cases.map((caseItem) => ({
+          case_idx: caseItem.case_idx || caseItem.id,
+          title: caseItem.title,
+          summary: caseItem.summary,
+          prob_def: caseItem.prob_def,
+          sol_detail: caseItem.sol_detail,
+          prob_main: caseItem.prob_main,
+          prob_keyword: caseItem.prob_keyword,
+          sol_type: caseItem.sol_type,
+          industry: caseItem.industry,
+          perf_type: caseItem.perf_type,
+          perf_dir: caseItem.perf_dir,
+          reco_reason: caseItem.reco_reason,
+          condition_match: caseItem.condition_match,
+          final_score: caseItem.final_score,
+        })),
+      };
+
+      const res = await fetch(`${AI_API_BASE_URL}/personal-strategies`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null);
+        throw new Error(errorData?.detail || "맞춤 전략 생성에 실패했습니다.");
+      }
+
+      const data = await res.json();
+      const strategies = Array.isArray(data.strategies) ? data.strategies : [];
+      const strategyMap = new Map(
+        strategies.map((item) => [
+          String(item.case_idx),
+          {
+            personal_strategy: item.personal_strategy || "",
+            personal_strategy_status: item.strategy_status || null,
+          },
+        ])
+      );
+
+      const applyStrategyToCase = (caseItem) => {
+        const caseKey = String(caseItem.case_idx ?? caseItem.id);
+        const strategyInfo = strategyMap.get(caseKey);
+
+        if (!strategyInfo) return caseItem;
+
+        return {
+          ...caseItem,
+          personal_strategy: strategyInfo.personal_strategy,
+          personal_strategy_status: strategyInfo.personal_strategy_status,
+          personal_context: trimmedContext,
+        };
+      };
+
+      setResult((prev) => {
+        if (!prev?.cases) return prev;
+
+        return {
+          ...prev,
+          cases: prev.cases.map(applyStrategyToCase),
+        };
+      });
+
+      setSelectedCase((prev) => (prev ? applyStrategyToCase(prev) : prev));
+      setSelectedCases((prev) => prev.map(applyStrategyToCase));
+      setShowPersonalStrategyModal(false);
+      setPersonalStrategyToast("맞춤 전략이 생성되었습니다.");
+
+      setTimeout(() => {
+        setPersonalStrategyToast("");
+      }, 3200);
+    } catch (error) {
+      console.error("적용 방향 생성 실패:", error);
+      setPersonalStrategyError(error.message || "맞춤 전략 생성 중 오류가 발생했습니다.");
+    } finally {
+      setPersonalStrategyLoading(false);
+    }
+  };
+
   const handleClear = () => {
     setQuery("");
     setResult(null);
@@ -720,6 +827,10 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
     setSelectedCategory(null);
     setSelectedKeyword(null);
     setShowAnalysisModal(false);
+    setShowPersonalStrategyModal(false);
+    setShowBottomExport(false);
+    setPersonalContext("");
+    setPersonalStrategyError(null);
     setShowAllList(false);
     setVisibleCount(10);
     setHasSearched(false);
@@ -872,7 +983,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
                 border: textareaFocused ? "1.5px solid #E86F00" : "1px solid transparent",
                 borderBottom: "none",
                 borderRadius: 0,
-                marginBottom: -5,
+                marginBottom: -20,
               }}
               placeholder="비즈니스 고민을 자유롭게 입력해주세요."
               value={query}
@@ -882,36 +993,6 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
               onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSearch(); }}
             />
 
-            <div style={{ ...styles.exampleAreaInInput, borderTop: "1px solid #e0e0e0" }}>
-              <p style={styles.chipsLabel}>예시 고민</p>
-              <div style={{ display: "flex", gap: 6, justifyContent: "center", marginBottom: 6, flexWrap: "wrap" }}>
-                <span style={styles.exampleChip}>리테일 업종에서 3년 차 마케터인데, 브랜드 인지도는 높아졌는데 실제 구매 전환율이 너무 낮아요.</span>
-                <span style={styles.exampleChip}>식음료 스타트업 창업한지 2년차, 매출은 나오는데 수익성이 계속 악화되고 있어요.</span>
-              </div>
-              <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap" }}>
-                <span style={styles.exampleChip}>IT 플랫폼 기업 신사업팀 4년 차인데, 새로운 시장에 진입하려는데 어디서부터 시작해야 할까요?</span>
-                <span style={styles.exampleChip}>커머스 회사 PM입니다. 신규 유저는 늘고 있는데 고객 이탈률이 높아서 고민이에요.</span>
-                <span style={styles.exampleChip}>헬스케어 스타트업 대표인데, 기술은 있는데 어떤 고객층부터 공략해야 할지 방향을 못 잡겠어요.</span>
-              </div>
-            </div>
-          </div>
-
-          <div style={styles.btnRow}>
-            <button
-              style={{ ...styles.btnClear, background: clearBtnHover ? "#e8e8e8" : "transparent", opacity: isSearchDisabled ? 0.5 : 1, cursor: isSearchDisabled ? "not-allowed" : "pointer" }}
-              onMouseEnter={() => setClearBtnHover(true)}
-              onMouseLeave={() => setClearBtnHover(false)}
-              onClick={handleClear}
-              disabled={isSearchDisabled && selectedIndustry === null}
-            >초기화</button>
-            <button
-              style={{ ...styles.btnSearch, background: btnHover ? "#C45E00" : "#E86F00", opacity: isSearchDisabled ? 0.5 : 1, cursor: isSearchDisabled ? "not-allowed" : "pointer" }}
-              onMouseEnter={() => setBtnHover(true)}
-              onMouseLeave={() => setBtnHover(false)}
-              onClick={handleSearch}
-              disabled={isSearchDisabled}
-            >케이스 탐색 시작</button>
-          </div>
           <div style={styles.historyToggleWrapper}>
             <button
               type="button"
@@ -984,6 +1065,37 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
               </div>
             )}
           </div>
+
+            <div style={{ ...styles.exampleAreaInInput, borderTop: "1px solid #e0e0e0" }}>
+              <p style={styles.chipsLabel}>예시 고민</p>
+              <div style={{ display: "flex", gap: 6, justifyContent: "center", marginBottom: 6, flexWrap: "wrap" }}>
+                <span style={styles.exampleChip}>리테일 업종에서 3년 차 마케터인데, 브랜드 인지도는 높아졌는데 실제 구매 전환율이 너무 낮아요.</span>
+                <span style={styles.exampleChip}>식음료 스타트업 창업한지 2년차, 매출은 나오는데 수익성이 계속 악화되고 있어요.</span>
+              </div>
+              <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap" }}>
+                <span style={styles.exampleChip}>IT 플랫폼 기업 신사업팀 4년 차인데, 새로운 시장에 진입하려는데 어디서부터 시작해야 할까요?</span>
+                <span style={styles.exampleChip}>커머스 회사 PM입니다. 신규 유저는 늘고 있는데 고객 이탈률이 높아서 고민이에요.</span>
+                <span style={styles.exampleChip}>헬스케어 스타트업 대표인데, 기술은 있는데 어떤 고객층부터 공략해야 할지 방향을 못 잡겠어요.</span>
+              </div>
+            </div>
+          </div>
+
+          <div style={styles.btnRow}>
+            <button
+              style={{ ...styles.btnClear, background: clearBtnHover ? "#e8e8e8" : "transparent", opacity: isSearchDisabled ? 0.5 : 1, cursor: isSearchDisabled ? "not-allowed" : "pointer" }}
+              onMouseEnter={() => setClearBtnHover(true)}
+              onMouseLeave={() => setClearBtnHover(false)}
+              onClick={handleClear}
+              disabled={isSearchDisabled && selectedIndustry === null}
+            >초기화</button>
+            <button
+              style={{ ...styles.btnSearch, background: btnHover ? "#C45E00" : "#E86F00", opacity: isSearchDisabled ? 0.5 : 1, cursor: isSearchDisabled ? "not-allowed" : "pointer" }}
+              onMouseEnter={() => setBtnHover(true)}
+              onMouseLeave={() => setBtnHover(false)}
+              onClick={handleSearch}
+              disabled={isSearchDisabled}
+            >케이스 탐색 시작</button>
+          </div>
         </div>
 
         {error && <p style={styles.errorText}>{error}</p>}
@@ -1011,8 +1123,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
             <div style={styles.card}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                 <p style={styles.cardLabel}>
-                  {result ? "유사 케이스 추천 " : "추천 케이스 TOP 5"}
-                  {result && <span style={{ color: "#E86F00" }}>5</span>}
+                  추천 케이스 <span style={{ color: "#E86F00" }}>5</span>
                 </p>
                 
                 {result && (
@@ -1032,6 +1143,23 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
               </div>
 
               <hr style={{ border: "none", borderTop: "2px solid #E86F00", margin: "0 0 12px 0" }} />
+
+              {result && (
+                <div style={styles.personalStrategyActionBox}>
+                  <button
+                    type="button"
+                    style={styles.personalStrategyTopBtn}
+                    onClick={() => {
+                      setPersonalStrategyError(null);
+                      setShowPersonalStrategyModal(true);
+                    }}
+                    title="추천 케이스 내 상황에 맞게 적용하기"
+                  >
+                    <span>추천 케이스 내 상황에 적용하기</span>
+                    <span style={styles.personalStrategyTopBtnArrow}></span>
+                  </button>
+                </div>
+              )}
 
               {result?.result_status && (
                 <div style={styles.recommendStatusBox}>
@@ -1142,6 +1270,23 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
         />
       )}
 
+      {showPersonalStrategyModal && result && (
+        <PersonalStrategyModal
+          value={personalContext}
+          onChange={setPersonalContext}
+          loading={personalStrategyLoading}
+          error={personalStrategyError}
+          caseCount={result.cases?.length || 0}
+          onClose={() => {
+            if (!personalStrategyLoading) {
+              setShowPersonalStrategyModal(false);
+              setPersonalStrategyError(null);
+            }
+          }}
+          onSubmit={handleCreatePersonalStrategies}
+        />
+      )}
+
       {selectedCase && (
         <CasePanel
           caseData={selectedCase}
@@ -1160,6 +1305,14 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
           onClose={() => setShowCompare(false)}
         />
       )}
+
+      {showBottomExport && (
+        <QuickExportModal
+          cases={selectedCases}
+          onClose={() => setShowBottomExport(false)}
+        />
+      )}
+
       {selectedCases.length > 0 && (
         <div style={{ ...styles.bottomBar, flexDirection: "column", padding: 0 }}>
           {showSelectedList && (
@@ -1189,8 +1342,18 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
             </span>
             <div style={{ display: "flex", gap: 8 }}>
               <button style={styles.bottomBarBtnOutline} onClick={() => { setShowCompare(true); setSelectedCase(null); }}>케이스 비교하기</button>
-              {/* <button style={styles.bottomBarBtnFill}>내보내기</button> */}
+              <button style={styles.bottomBarBtnFill} onClick={() => setShowBottomExport(true)}>내보내기</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {personalStrategyToast && (
+        <div style={styles.personalStrategyToast}>
+          <div style={styles.personalStrategyToastIcon}>✓</div>
+          <div>
+            <p style={styles.personalStrategyToastTitle}>생성 완료</p>
+            <p style={styles.personalStrategyToastText}>{personalStrategyToast}</p>
           </div>
         </div>
       )}
@@ -1429,6 +1592,79 @@ function AnalysisModal({ result, onClose }) {
   );
 }
 
+function PersonalStrategyModal({ value, onChange, loading, error, caseCount, onClose, onSubmit }) {
+  return (
+    <>
+      <div style={styles.personalModalOverlay} onClick={loading ? undefined : onClose} />
+
+      <div style={styles.personalModal}>
+        <div style={styles.personalModalHeader}>
+          <div>
+            <p style={styles.personalModalLabel}>추천 케이스를 내 상황에 적용하기</p>
+            <h2 style={styles.personalModalTitle}>현재 상황을 입력해주세요</h2>
+            <p style={styles.personalModalDesc}>
+              입력한 내용은 추천 케이스를 내 상황에 맞게 해석하는 데 사용됩니다.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            style={styles.personalModalCloseBtn}
+            onClick={onClose}
+            disabled={loading}
+          >
+            ✕
+          </button>
+        </div>
+
+        <div style={styles.personalExampleBox}>
+          <p style={styles.personalExampleTitle}>예시</p>
+          <p style={styles.personalExampleText}>
+            저는 CRM 마케팅을 맡고 있고, 고객 이탈률을 줄여야 합니다. <br/>예산이 많지 않아 바로 실행할 수 있는 작은 개선 방향을 찾고 싶어요.
+          </p>
+        </div>
+
+        <textarea
+          style={styles.personalTextarea}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="현재 역할, 문제 상황, 제약 조건을 자유롭게 입력해주세요."
+          disabled={loading}
+        />
+
+        {error && <p style={styles.personalErrorText}>{error}</p>}
+
+        {/* <div style={styles.personalModalNotice}>
+          입력한 상황과 케이스가 충분히 맞지 않으면 적용 한계도 함께 안내합니다.
+        </div> */}
+
+        <div style={styles.personalModalFooter}>
+          <button
+            type="button"
+            style={styles.personalCancelBtn}
+            onClick={onClose}
+            disabled={loading}
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            style={{
+              ...styles.personalSubmitBtn,
+              opacity: loading ? 0.7 : 1,
+              cursor: loading ? "wait" : "pointer",
+            }}
+            onClick={onSubmit}
+            disabled={loading}
+          >
+            {loading ? "맞춤 전략 생성 중..." : "적용하기"}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function LoadingDots() {
   return (
     <div style={{ display: "flex", gap: 4 }}>
@@ -1515,6 +1751,49 @@ function CaseItem({ item, isSelected, isViewing, isBookmarked, onClick, onToggle
   );
 }
 
+function formatInsightParagraphs(text) {
+  if (!text) return [];
+
+  const normalized = String(text)
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!normalized) return [];
+
+  const sentences = normalized
+    .split(/(?<=[.!?。！？]|다\.|요\.|음\.|됨\.|했다\.|였다\.|한다\.|있다\.|됐다\.)\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+
+  if (sentences.length <= 1) {
+    return [normalized];
+  }
+
+  const paragraphs = [];
+
+  for (let i = 0; i < sentences.length; i += 2) {
+    paragraphs.push(sentences.slice(i, i + 2).join(" "));
+  }
+
+  return paragraphs;
+}
+
+function InsightParagraphs({ text, paragraphStyle }) {
+  const paragraphs = formatInsightParagraphs(text);
+
+  if (paragraphs.length === 0) return null;
+
+  return (
+    <div style={styles.insightTextGroup}>
+      {paragraphs.map((paragraph, index) => (
+        <p key={index} style={paragraphStyle || styles.insightParagraph}>
+          {paragraph}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 function CasePanel({ caseData, selectedCases, isSelected, isBookmarked, onToggleSelect, onToggleBookmark, onClose }) {
   const [linkHover, setLinkHover] = useState(false); 
   const [addHover, setAddHover] = useState(false);
@@ -1529,7 +1808,7 @@ function CasePanel({ caseData, selectedCases, isSelected, isBookmarked, onToggle
     const filtered = prev.filter((h) => h.title !== caseData.title);
     localStorage.setItem("caseHistory", JSON.stringify([newItem, ...filtered].slice(0, 30)));
   }, [caseData]);
-  
+
   const toggleBookmark = (e) => {
     e.stopPropagation();
     onToggleBookmark?.();
@@ -1563,46 +1842,39 @@ function CasePanel({ caseData, selectedCases, isSelected, isBookmarked, onToggle
         {caseData.prob_main && <><span style={{ fontSize: 14, fontWeight: 600, color: "#E86F00" }}>|</span><span style={{ fontSize: 14, fontWeight: 600, color: "#E86F00" }}>{caseData.prob_main}</span></>}
         {caseData.sol_type && <><span style={{ fontSize: 14, fontWeight: 600, color: "#E86F00" }}>|</span><span style={{ fontSize: 14, fontWeight: 600, color: "#E86F00" }}>{caseData.sol_type}</span></>}
       </div>
-      <button
-        style={{ 
-          width: "100%", padding: "12px", fontSize: 14, fontWeight: 600, 
-          color: "#fff", background: isSelected ? "#1a1a1a" : selectedCases.length >= 3 && !isSelected ? "#ccc" : addHover ? "#C45E00" : "#E86F00", 
-          border: "none", borderRadius: 2, cursor: isSelected || selectedCases.length < 3 ? "pointer" : "not-allowed", 
-          fontFamily: "inherit", transition: "all 0.2s", marginBottom: 14
-        }}
-        onClick={onToggleSelect}
-        onMouseEnter={() => setAddHover(true)}
-        onMouseLeave={() => setAddHover(false)}
-        disabled={!isSelected && selectedCases.length >= 3}
-      >
-        {isSelected ? "비교에서 제거" : "＋ 비교에 추가"}
-      </button>
-      
+
+      <div style={styles.panelActionGroup}>
+        <button
+          style={{ 
+            width: "100%", padding: "12px", fontSize: 14, fontWeight: 600, 
+            color: "#fff", background: isSelected ? "#1a1a1a" : selectedCases.length >= 3 && !isSelected ? "#ccc" : addHover ? "#C45E00" : "#E86F00", 
+            border: "none", borderRadius: 2, cursor: isSelected || selectedCases.length < 3 ? "pointer" : "not-allowed", 
+            fontFamily: "inherit", transition: "all 0.2s"
+          }}
+          onClick={onToggleSelect}
+          onMouseEnter={() => setAddHover(true)}
+          onMouseLeave={() => setAddHover(false)}
+          disabled={!isSelected && selectedCases.length >= 3}
+        >
+          {isSelected ? "비교에서 제거" : "＋ 비교에 추가"}
+        </button>
+
+        <button
+          type="button"
+          style={styles.panelSummaryBtn}
+          onClick={() => setShowSummaryModal(true)}
+        >
+          요약문 바로보기
+        </button>
+      </div>
+
       <div style={{ flex: 1 }}>
         {caseData.reco_reason && (
           <div style={styles.reasonBox}>
-            <p style={styles.reasonTitle}>[ AI 추천 이유 ]</p>
-            <p style={styles.reasonItem}>→ {caseData.reco_reason}</p>
+            <p style={styles.reasonTitle}>AI 추천 이유</p>
+            <InsightParagraphs text={caseData.reco_reason} />
           </div>
         )}
-
-        <div style={styles.reasonBox}>
-          <div style={styles.summaryPreviewHeader}>
-            <div>
-              <p style={styles.reasonTitle}>[ 상세 요약 및 전략 ]</p>
-              <p style={styles.summaryPreviewText}>
-                긴 요약문은 별도 창에서 더 편하게 확인할 수 있어요.
-              </p>
-            </div>
-
-            <button
-              style={styles.summaryOpenBtn}
-              onClick={() => setShowSummaryModal(true)}
-            >
-              요약문 바로보기
-            </button>
-          </div>
-        </div>
 
         {caseData.prob_def && (
           <div style={styles.reasonBoxWhite}>
@@ -1615,6 +1887,31 @@ function CasePanel({ caseData, selectedCases, isSelected, isBookmarked, onToggle
           <div style={styles.reasonBoxWhite}>
             <p style={styles.reasonTitleDark}>해결 전략</p>
             <p style={styles.reasonItem}>{caseData.sol_detail}</p>
+          </div>
+        )}
+
+        {caseData.personal_strategy ? (
+          <div style={styles.personalStrategyBox}>
+            <div style={styles.personalStrategyHeader}>
+              <p style={styles.personalStrategyTitle}>맞춤 전략</p>
+              {caseData.personal_strategy_status === "reference" && (
+                <span style={styles.personalStrategyBadge}>참고 관점</span>
+              )}
+              {caseData.personal_strategy_status === "limited" && (
+                <span style={styles.personalStrategyBadgeMuted}>적용 한계</span>
+              )}
+            </div>
+            <InsightParagraphs
+              text={caseData.personal_strategy}
+              paragraphStyle={styles.personalStrategyParagraph}
+            />
+          </div>
+        ) : (
+          <div style={styles.personalStrategyEmptyBox}>
+            <p style={styles.personalStrategyEmptyTitle}>맞춤 전략</p>
+            <p style={styles.personalStrategyEmptyText}>
+              추천 결과 상단의 버튼에서 현재 상황을 입력하면 이 케이스의 적용 방향이 표시됩니다.
+            </p>
           </div>
         )}
       </div>
@@ -1726,6 +2023,7 @@ function CompareSidebar({ cases, onClose }) {
     probDef: true,
     solDetail: true,
     recoReason: true,
+    personalStrategy: true,
     summary: false,
   });
 
@@ -1741,6 +2039,10 @@ function CompareSidebar({ cases, onClose }) {
     return caseData.reco_reason || caseData.reason_check || "추천 이유가 등록되지 않았습니다.";
   };
 
+  const getPersonalStrategy = (caseData) => {
+    return caseData.personal_strategy || "아직 생성된 적용 전략이 없습니다.";
+  };
+
   const escapeHtml = (value) => {
     return String(value ?? "-")
       .replace(/&/g, "&amp;")
@@ -1752,6 +2054,12 @@ function CompareSidebar({ cases, onClose }) {
 
   const formatExportSummaryHtml = (summary) => {
     return formatSummaryParagraphs(summary)
+      .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
+      .join("");
+  };
+
+  const formatExportInsightHtml = (value) => {
+    return formatInsightParagraphs(value)
       .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
       .join("");
   };
@@ -1777,6 +2085,7 @@ function CompareSidebar({ cases, onClose }) {
     { key: "probDef", label: "문제 정의" },
     { key: "solDetail", label: "해결 전략" },
     { key: "recoReason", label: "AI 추천 이유" },
+    { key: "personalStrategy", label: "맞춤 전략" },
     { key: "summary", label: "요약문" },
   ];
 
@@ -1821,8 +2130,24 @@ function CompareSidebar({ cases, onClose }) {
       key: "reco_reason",
       values: cases.map((c) => (
         <div style={styles.compareReasonBox}>
-          <p style={styles.compareReasonTitle}>[ AI 추천 이유 ]</p>
-          <p style={styles.compareReasonText}>→ {getCaseReason(c)}</p>
+          <p style={styles.compareReasonTitle}>AI 추천 이유</p>
+          <InsightParagraphs
+            text={getCaseReason(c)}
+            paragraphStyle={styles.compareReasonParagraph}
+          />
+        </div>
+      )),
+    },
+    {
+      label: "맞춤 전략",
+      key: "personal_strategy",
+      values: cases.map((c) => (
+        <div style={c.personal_strategy ? styles.comparePersonalBox : styles.comparePersonalEmptyBox}>
+          <p style={c.personal_strategy ? styles.comparePersonalTitle : styles.comparePersonalEmptyTitle}>맞춤 전략</p>
+          <InsightParagraphs
+            text={getPersonalStrategy(c)}
+            paragraphStyle={c.personal_strategy ? styles.comparePersonalParagraph : styles.comparePersonalEmptyParagraph}
+          />
         </div>
       )),
     },
@@ -1897,8 +2222,21 @@ function CompareSidebar({ cases, onClose }) {
         className: "reason-cell",
         valueGetter: (c) => `
           <div class="reason-box">
-            <p class="reason-title">[ AI 추천 이유 ]</p>
-            <p class="reason-text">→ ${escapeHtml(getCaseReason(c))}</p>
+            <p class="reason-title">AI 추천 이유</p>
+            <div class="reason-text">${formatExportInsightHtml(getCaseReason(c))}</div>
+          </div>
+        `,
+      });
+    }
+
+    if (exportOptions.personalStrategy) {
+      rows.push({
+        label: "맞춤 전략",
+        className: "personal-strategy-cell",
+        valueGetter: (c) => `
+          <div class="personal-strategy-box">
+            <p class="personal-strategy-title">맞춤 전략</p>
+            <div class="personal-strategy-text">${formatExportInsightHtml(getPersonalStrategy(c))}</div>
           </div>
         `,
       });
@@ -2034,11 +2372,30 @@ function CompareSidebar({ cases, onClose }) {
               font-size: 12px;
               font-weight: 900;
             }
-            .reason-text {
-              margin: 0;
+            .reason-text p {
+              margin: 0 0 8px;
               color: #444;
               line-height: 1.75;
             }
+            .reason-text p:last-child { margin-bottom: 0; }
+            .personal-strategy-box {
+              border: 1px solid #d8e7d9;
+              background: #f4faf4;
+              border-radius: 8px;
+              padding: 12px 13px;
+            }
+            .personal-strategy-title {
+              margin: 0 0 6px;
+              color: #32753b;
+              font-size: 12px;
+              font-weight: 900;
+            }
+            .personal-strategy-text p {
+              margin: 0 0 8px;
+              color: #444;
+              line-height: 1.75;
+            }
+            .personal-strategy-text p:last-child { margin-bottom: 0; }
             .summary-cell p {
               margin: 0 0 10px;
               color: #333;
@@ -2276,7 +2633,489 @@ function CompareSidebar({ cases, onClose }) {
 }
 
 
+
+function QuickExportModal({ cases, onClose }) {
+  const [exportOptions, setExportOptions] = useState({
+    industry: true,
+    probMain: true,
+    solType: true,
+    date: true,
+    probDef: true,
+    solDetail: true,
+    recoReason: true,
+    personalStrategy: true,
+    summary: false,
+  });
+
+  const getCaseCompany = (caseData) => {
+    return caseData.company || caseData.comp_name || "-";
+  };
+
+  const getCaseYear = (caseData) => {
+    return caseData.date || (caseData.pub_year ? `${caseData.pub_year}년` : "-");
+  };
+
+  const getCaseReason = (caseData) => {
+    return caseData.reco_reason || caseData.reason_check || "추천 이유가 등록되지 않았습니다.";
+  };
+
+  const getPersonalStrategy = (caseData) => {
+    return caseData.personal_strategy || "아직 생성된 맞춤 전략이 없습니다.";
+  };
+
+  const escapeHtml = (value) => {
+    return String(value ?? "-")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  };
+
+  const formatExportSummaryHtml = (summary) => {
+    return formatSummaryParagraphs(summary)
+      .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
+      .join("");
+  };
+
+  const formatExportInsightHtml = (value) => {
+    return formatInsightParagraphs(value)
+      .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
+      .join("");
+  };
+
+  const toggleExportOption = (key) => {
+    setExportOptions((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+
+  const exportOptionList = [
+    { key: "industry", label: "산업 분야" },
+    { key: "probMain", label: "문제 유형" },
+    { key: "solType", label: "전략 유형" },
+    { key: "date", label: "발행일" },
+    { key: "probDef", label: "문제 정의" },
+    { key: "solDetail", label: "해결 전략" },
+    { key: "recoReason", label: "AI 추천 이유" },
+    { key: "personalStrategy", label: "맞춤 전략" },
+    { key: "summary", label: "요약문" },
+  ];
+
+  const buildExportRows = () => {
+    const rows = [
+      {
+        label: "기업명",
+        valueGetter: (c) => escapeHtml(getCaseCompany(c)),
+      },
+    ];
+
+    if (exportOptions.industry) {
+      rows.push({
+        label: "산업 분야",
+        valueGetter: (c) => escapeHtml(c.industry || "-"),
+      });
+    }
+
+    if (exportOptions.probMain) {
+      rows.push({
+        label: "문제 유형",
+        valueGetter: (c) => escapeHtml(c.prob_main || "-"),
+      });
+    }
+
+    if (exportOptions.solType) {
+      rows.push({
+        label: "전략 유형",
+        valueGetter: (c) => escapeHtml(c.sol_type || "-"),
+      });
+    }
+
+    if (exportOptions.date) {
+      rows.push({
+        label: "발행일",
+        valueGetter: (c) => escapeHtml(getCaseYear(c)),
+      });
+    }
+
+    if (exportOptions.probDef) {
+      rows.push({
+        label: "문제 정의",
+        valueGetter: (c) => escapeHtml(c.prob_def || "-"),
+      });
+    }
+
+    if (exportOptions.solDetail) {
+      rows.push({
+        label: "해결 전략",
+        valueGetter: (c) => escapeHtml(c.sol_detail || "-"),
+      });
+    }
+
+    if (exportOptions.recoReason) {
+      rows.push({
+        label: "AI 추천 이유",
+        className: "reason-cell",
+        valueGetter: (c) => `
+          <div class="reason-box">
+            <p class="reason-title">AI 추천 이유</p>
+            <div class="reason-text">${formatExportInsightHtml(getCaseReason(c))}</div>
+          </div>
+        `,
+      });
+    }
+
+    if (exportOptions.personalStrategy) {
+      rows.push({
+        label: "맞춤 전략",
+        className: "personal-strategy-cell",
+        valueGetter: (c) => `
+          <div class="personal-strategy-box">
+            <p class="personal-strategy-title">맞춤 전략</p>
+            <div class="personal-strategy-text">${formatExportInsightHtml(getPersonalStrategy(c))}</div>
+          </div>
+        `,
+      });
+    }
+
+    if (exportOptions.summary) {
+      rows.push({
+        label: "요약문",
+        className: "summary-cell",
+        valueGetter: (c) => formatExportSummaryHtml(c.summary),
+      });
+    }
+
+    return rows;
+  };
+
+  const handleExportCases = () => {
+    const printWindow = window.open("", "_blank", "width=1200,height=800");
+
+    if (!printWindow) {
+      alert("팝업이 차단되어 내보내기 창을 열 수 없습니다. 브라우저 팝업 허용 후 다시 시도해주세요.");
+      return;
+    }
+
+    const selectedRows = buildExportRows();
+
+    const rowHtml = selectedRows
+      .map(
+        (row) => `
+          <tr>
+            <th>${escapeHtml(row.label)}</th>
+            ${cases
+              .map((caseItem) => `<td class="${row.className || ""}">${row.valueGetter(caseItem)}</td>`)
+              .join("")}
+          </tr>
+        `
+      )
+      .join("");
+
+    const includedLabels = selectedRows.map((row) => row.label).join(", ");
+
+    const printContent = `
+      <!doctype html>
+      <html lang="ko">
+        <head>
+          <meta charset="utf-8" />
+          <title>DBR Case Atlas - 케이스 내보내기</title>
+          <style>
+            * { box-sizing: border-box; }
+            body {
+              margin: 0;
+              padding: 34px 42px;
+              font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", Arial, sans-serif;
+              color: #1a1a1a;
+              background: #fff;
+            }
+            .eyebrow {
+              margin: 0 0 6px;
+              font-size: 12px;
+              font-weight: 900;
+              letter-spacing: 0.12em;
+              color: #E86F00;
+            }
+            h1 {
+              margin: 0 0 8px;
+              font-size: 28px;
+              line-height: 1.3;
+            }
+            .desc {
+              margin: 0 0 8px;
+              font-size: 14px;
+              color: #666;
+              line-height: 1.6;
+            }
+            .included {
+              margin: 0 0 18px;
+              font-size: 12px;
+              color: #999;
+              line-height: 1.6;
+            }
+            .bar {
+              height: 2px;
+              background: #E86F00;
+              margin: 18px 0 18px;
+            }
+            table {
+              width: 100%;
+              table-layout: fixed;
+              border-collapse: collapse;
+              border: 1px solid #e6e6e6;
+            }
+            th, td {
+              border: 1px solid #e6e6e6;
+              padding: 14px 14px;
+              vertical-align: top;
+              font-size: 13px;
+              line-height: 1.7;
+              word-break: keep-all;
+            }
+            th {
+              width: 120px;
+              background: #fafafa;
+              color: #555;
+              font-weight: 800;
+              text-align: left;
+            }
+            .case-head { background: #fcfcfc; }
+            .case-rank {
+              display: inline-block;
+              margin-right: 8px;
+              color: #E86F00;
+              font-weight: 900;
+            }
+            .case-title {
+              font-weight: 900;
+              line-height: 1.55;
+            }
+            .case-company {
+              margin-top: 8px;
+              color: #999;
+              font-size: 12px;
+              font-weight: 600;
+            }
+            .reason-box {
+              border: 1px solid #f5cbb8;
+              background: #FEF0E9;
+              border-radius: 8px;
+              padding: 12px 13px;
+            }
+            .reason-title {
+              margin: 0 0 6px;
+              color: #E86F00;
+              font-size: 12px;
+              font-weight: 900;
+            }
+            .reason-text p {
+              margin: 0 0 8px;
+              color: #444;
+              line-height: 1.75;
+            }
+            .reason-text p:last-child { margin-bottom: 0; }
+            .personal-strategy-box {
+              border: 1px solid #d8e7d9;
+              background: #f4faf4;
+              border-radius: 8px;
+              padding: 12px 13px;
+            }
+            .personal-strategy-title {
+              margin: 0 0 6px;
+              color: #32753b;
+              font-size: 12px;
+              font-weight: 900;
+            }
+            .personal-strategy-text p {
+              margin: 0 0 8px;
+              color: #444;
+              line-height: 1.75;
+            }
+            .personal-strategy-text p:last-child { margin-bottom: 0; }
+            .summary-cell p {
+              margin: 0 0 10px;
+              color: #333;
+              line-height: 1.8;
+              word-break: keep-all;
+            }
+            .summary-cell p:last-child { margin-bottom: 0; }
+            @media print {
+              body { padding: 24px; }
+              tr { page-break-inside: avoid; page-break-after: auto; }
+            }
+          </style>
+        </head>
+        <body>
+          <p class="eyebrow">DBR CASE ATLAS</p>
+          <h1>케이스 내보내기</h1>
+          <p class="desc">선택한 ${cases.length}개 케이스를 정리한 내보내기 문서입니다.</p>
+          <p class="included">포함 항목: ${escapeHtml(includedLabels)}</p>
+          <div class="bar"></div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>항목</th>
+                ${cases
+                  .map(
+                    (caseItem, index) => `
+                      <td class="case-head">
+                        <div class="case-title"><span class="case-rank">${index + 1}</span>${escapeHtml(caseItem.title || "-")}</div>
+                        <div class="case-company">${escapeHtml(getCaseCompany(caseItem))}</div>
+                      </td>
+                    `
+                  )
+                  .join("")}
+              </tr>
+            </thead>
+            <tbody>
+              ${rowHtml}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    printWindow.focus();
+
+    setTimeout(() => {
+      printWindow.print();
+    }, 350);
+  };
+
+  const handleConfirmExport = () => {
+    onClose();
+    handleExportCases();
+  };
+
+  const renderExportToggle = (option) => {
+    const isChecked = !!exportOptions[option.key];
+
+    return (
+      <button
+        key={option.key}
+        type="button"
+        style={styles.exportOptionItem}
+        onClick={() => toggleExportOption(option.key)}
+      >
+        <span style={styles.exportOptionText}>{option.label}</span>
+        <span
+          style={{
+            ...styles.exportSwitch,
+            background: isChecked ? "#E86F00" : "#d5d5d5",
+          }}
+        >
+          <span
+            style={{
+              ...styles.exportSwitchCircle,
+              transform: isChecked ? "translateX(18px)" : "translateX(0)",
+            }}
+          />
+        </span>
+      </button>
+    );
+  };
+
+  return (
+    <>
+      <div style={styles.exportModalOverlay} onClick={onClose} />
+
+      <div style={styles.exportModal}>
+        <div style={styles.exportModalHeader}>
+          <div>
+            <p style={styles.exportModalLabel}>PDF 내보내기 설정</p>
+            <h3 style={styles.exportModalTitle}>포함할 항목 선택</h3>
+            <p style={styles.exportModalDesc}></p>
+          </div>
+
+          <button
+            type="button"
+            style={styles.exportModalCloseBtn}
+            onClick={onClose}
+          >
+            ✕
+          </button>
+        </div>
+
+        <div style={styles.exportFixedItem}>
+          <span style={styles.exportFixedText}>기업명</span>
+        </div>
+
+        <div style={styles.exportOptionGrid}>
+          {exportOptionList.map(renderExportToggle)}
+        </div>
+
+        <div style={styles.exportModalFooter}>
+          <button
+            type="button"
+            style={styles.exportCancelBtn}
+            onClick={onClose}
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            style={styles.exportConfirmBtn}
+            onClick={handleConfirmExport}
+          >
+            PDF로 내보내기
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 const styles = {
+  resultActionGroup: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" },
+  personalStrategyActionBox: { width: "100%", padding: "0 0 12px", margin: "0 0 12px", borderBottom: "1px solid #f0f0f0", background: "transparent" },
+  personalStrategyActionTitle: { margin: "0 0 4px", fontSize: 13, fontWeight: 900, color: "#E86F00" },
+  personalStrategyActionDesc: { flex: 1, margin: 0, fontSize: 12.5, color: "#888", lineHeight: 1.45, wordBreak: "keep-all" },
+  personalStrategyToast: { position: "fixed", right: 28, bottom: 92, zIndex: 2200, display: "flex", alignItems: "center", gap: 12, width: 320, padding: "14px 16px", background: "#fff", border: "1px solid #F7D8C6", borderLeft: "4px solid #E86F00", borderRadius: 12, boxShadow: "0 12px 32px rgba(0,0,0,0.14)" },
+  personalStrategyToastIcon: { width: 28, height: 28, borderRadius: "50%", background: "#E86F00", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 900, flexShrink: 0 },
+  personalStrategyToastTitle: { margin: "0 0 3px", fontSize: 13, fontWeight: 900, color: "#1a1a1a" },
+  personalStrategyToastText: { margin: 0, fontSize: 12.5, lineHeight: 1.45, color: "#666" },
+  personalStrategyTopBtn: { width: "100%", minHeight: 44, padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 14, fontWeight: 900, color: "#fff", background: "#E86F00", border: "1px solid #E86F00", borderRadius: 6, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", boxShadow: "0 8px 18px rgba(232, 111, 0, 0.18)", transition: "all 0.2s ease" },
+  personalStrategyTopBtnArrow: { fontSize: 16, fontWeight: 900, lineHeight: 1, transform: "translateY(-1px)" },
+  personalModalOverlay: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.48)", zIndex: 1200 },
+  personalModal: { position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "min(620px, calc(100vw - 40px))", maxHeight: "88vh", overflowY: "auto", background: "#fff", borderRadius: 16, zIndex: 1300, padding: 30, boxShadow: "0 18px 50px rgba(0,0,0,0.18)", boxSizing: "border-box" },
+  personalModalHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 18, marginBottom: 18 },
+  personalModalLabel: { margin: "0 0 6px", fontSize: 12, fontWeight: 900, color: "#E86F00", letterSpacing: "0.08em" },
+  personalModalTitle: { margin: "0 0 8px", fontSize: 22, fontWeight: 900, color: "#1a1a1a" },
+  personalModalDesc: { margin: 0, fontSize: 14, lineHeight: 1.65, color: "#666", wordBreak: "keep-all" },
+  personalModalCloseBtn: { background: "rgba(232,111,0,0.1)", border: "none", borderRadius: "50%", width: 34, height: 34, color: "#E86F00", fontSize: 16, cursor: "pointer", flexShrink: 0 },
+  personalExampleBox: { background: "#FEF0E9", border: "1px solid #F7D8C6", borderRadius: 10, padding: "13px 15px", marginBottom: 14 },
+  personalExampleTitle: { margin: "0 0 6px", fontSize: 12, fontWeight: 900, color: "#E86F00" },
+  personalExampleText: { margin: 0, fontSize: 13.5, lineHeight: 1.65, color: "#555", wordBreak: "keep-all" },
+  personalTextarea: { width: "100%", minHeight: 150, padding: 15, border: "1px solid #e0e0e0", borderRadius: 10, resize: "vertical", fontSize: 14, lineHeight: 1.7, color: "#1a1a1a", fontFamily: "inherit", outline: "none", boxSizing: "border-box" },
+  personalErrorText: { margin: "10px 0 0", fontSize: 13, fontWeight: 700, color: "#c0392b" },
+  personalModalNotice: { marginTop: 12, padding: "11px 13px", background: "#f8f8f8", border: "1px solid #eee", borderRadius: 8, fontSize: 12.5, color: "#777", lineHeight: 1.6, wordBreak: "keep-all" },
+  personalModalFooter: { display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20 },
+  personalCancelBtn: { padding: "10px 18px", fontSize: 13, color: "#666", background: "#fff", border: "1px solid #e0e0e0", borderRadius: 8, cursor: "pointer", fontFamily: "inherit" },
+  personalSubmitBtn: { padding: "10px 18px", fontSize: 13, fontWeight: 800, color: "#fff", background: "#E86F00", border: "none", borderRadius: 8, fontFamily: "inherit" },
+  personalStrategyBox: { background: "#fff", border: "1px solid #d9e7dc", borderLeft: "3px solid #4A8F57", borderRadius: 6, padding: "14px 15px", marginBottom: 12 },
+  personalStrategyHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 9 },
+  personalStrategyTitle: { margin: 0, fontSize: 13, fontWeight: 900, color: "#2F6F3A" },
+  personalStrategyParagraph: { margin: "0 0 9px", fontSize: 13.5, lineHeight: 1.75, color: "#444", wordBreak: "keep-all" },
+  personalStrategyBadge: { flexShrink: 0, padding: "3px 7px", fontSize: 11, fontWeight: 800, color: "#2F6F3A", background: "#EEF7EF", borderRadius: 999 },
+  personalStrategyBadgeMuted: { flexShrink: 0, padding: "3px 7px", fontSize: 11, fontWeight: 800, color: "#777", background: "#f3f3f3", borderRadius: 999 },
+  personalStrategyText: { margin: 0, fontSize: 13.5, lineHeight: 1.75, color: "#444", wordBreak: "keep-all" },
+  personalStrategyGuide: { margin: "8px 0 0", fontSize: 12, color: "#777", lineHeight: 1.5 },
+  personalStrategyEmptyBox: { background: "#fff", border: "1px dashed #dedede", borderRadius: 6, padding: "13px 14px", marginBottom: 12 },
+  personalStrategyEmptyTitle: { margin: "0 0 7px", fontSize: 13, fontWeight: 800, color: "#777" },
+  personalStrategyEmptyText: { margin: 0, fontSize: 13, lineHeight: 1.65, color: "#999", wordBreak: "keep-all" },
+  comparePersonalBox: { background: "#fff", border: "1px solid #d9e7dc", borderLeft: "3px solid #4A8F57", borderRadius: 6, padding: "12px 13px" },
+  comparePersonalTitle: { margin: "0 0 7px", fontSize: 12, fontWeight: 900, color: "#2F6F3A" },
+  comparePersonalText: { margin: 0, fontSize: 13, lineHeight: 1.7, color: "#444", wordBreak: "keep-all" },
+  comparePersonalParagraph: { margin: "0 0 8px", fontSize: 13, lineHeight: 1.7, color: "#444", wordBreak: "keep-all" },
+  comparePersonalEmptyBox: { background: "#fafafa", border: "1px dashed #e0e0e0", borderRadius: 6, padding: "12px 13px" },
+  comparePersonalEmptyTitle: { margin: "0 0 7px", fontSize: 12, fontWeight: 900, color: "#999" },
+  comparePersonalEmptyText: { margin: 0, fontSize: 13, lineHeight: 1.6, color: "#aaa", wordBreak: "keep-all" },
+  comparePersonalEmptyParagraph: { margin: "0 0 8px", fontSize: 13, lineHeight: 1.6, color: "#aaa", wordBreak: "keep-all" },
   compareOverlay: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", zIndex: 500 },
   compareModal: { position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "92%", maxWidth: 1180, maxHeight: "86vh", background: "#fff", borderRadius: 16, zIndex: 600, overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 18px 50px rgba(0,0,0,0.18)" },
   compareHeader: { background: "#f3f3f3", padding: "1.5rem 2rem", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 20 },
@@ -2295,9 +3134,10 @@ const styles = {
   compareRow: { borderBottom: "1px solid #f0f0f0" },
   compareLabelCell: { padding: "15px 16px", fontSize: 13, color: "#666", fontWeight: 700, background: "#fafafa", verticalAlign: "top" },
   compareValueCell: { padding: "15px 16px", fontSize: 13.5, color: "#1a1a1a", borderLeft: "1px solid #f0f0f0", verticalAlign: "top", lineHeight: 1.65, wordBreak: "keep-all" },
-  compareReasonBox: { background: "#FEF0E9", border: "1px solid #F7D8C6", borderRadius: 8, padding: "12px 13px" },
-  compareReasonTitle: { fontSize: 12, fontWeight: 900, color: "#E86F00", margin: "0 0 6px" },
+  compareReasonBox: { background: "#FFF6F0", border: "1px solid #F3D8C7", borderLeft: "3px solid #E86F00", borderRadius: 6, padding: "12px 13px" },
+  compareReasonTitle: { fontSize: 12, fontWeight: 900, color: "#C45E00", margin: "0 0 7px" },
   compareReasonText: { fontSize: 13, color: "#555", lineHeight: 1.7, margin: 0, wordBreak: "keep-all" },
+  compareReasonParagraph: { margin: "0 0 8px", fontSize: 13, color: "#555", lineHeight: 1.7, wordBreak: "keep-all" },
   compareSummaryBtn: { padding: "9px 13px", fontSize: 13, fontWeight: 800, color: "#E86F00", background: "#fff", border: "1px solid #E86F00", borderRadius: 4, cursor: "pointer", fontFamily: "inherit" },
   compareFooter: { padding: "1rem 2rem", borderTop: "1px solid #e8e8e8", display: "flex", justifyContent: "flex-end", gap: 8, background: "#fff" },
   compareFooterBtn: { padding: "10px 20px", fontSize: 13, color: "#666", background: "#fff", border: "1px solid #e0e0e0", borderRadius: 8, cursor: "pointer", fontFamily: "inherit" },
@@ -2384,24 +3224,25 @@ const styles = {
   popularCompany: { fontSize: 12, color: "#999", marginTop: 5 },
 
   recommendStatusBox: {
-    background: "#fef0e9",
-    border: "1px solid #fff",
-    borderRadius: 8,
+    background: "#FFF8F3",
+    border: "1px solid #F3D8C7",
+    borderLeft: "3px solid #E86F00",
+    borderRadius: 6,
     padding: "12px 14px",
     marginBottom: 12,
   },
 
   recommendStatusTitle: {
     fontSize: 14,
-    fontWeight: 700,
-    color: "#E86F00",
-    marginBottom: 4,
+    fontWeight: 800,
+    color: "#C45E00",
+    margin: "0 0 4px",
   },
 
   recommendStatusMessage: {
     fontSize: 13,
-    color: "#555",
-    lineHeight: 1.5,
+    color: "#666",
+    lineHeight: 1.55,
     margin: 0,
   },
 
@@ -2439,11 +3280,17 @@ const styles = {
   panelHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 },
   panelTitle: { fontSize: 20, fontWeight: 700, color: "#1a1a1a", lineHeight: 1.4, margin: 0, flex: 1 },
   panelMeta: { fontSize: 15, color: "#666", marginBottom: 16 },
-  reasonBox: { background: "#FEF0E9", borderRadius: 4, padding: "14px", marginBottom: 14 },
-  reasonBoxWhite: { background: "#fff", border: "1px solid #eee", borderRadius: 4, padding: "14px", marginBottom: 14 },
-  reasonTitle: { fontSize: 13, fontWeight: 700, color: "#E86F00", marginBottom: 6 },
-  reasonTitleDark: { fontSize: 13, fontWeight: 700, color: "#333", marginBottom: 6 },
-  reasonItem: { fontSize: 14, color: "#555", lineHeight: 1.6, margin: 0 },
+  reasonBox: { background: "#FFF6F0", border: "1px solid #F3D8C7", borderLeft: "3px solid #E86F00", borderRadius: 6, padding: "14px 15px", marginBottom: 14 },
+  summaryBox: { background: "#FFF9F5", border: "1px solid #F3D8C7", borderRadius: 6, padding: "13px 14px", marginBottom: 14 },
+  reasonBoxWhite: { background: "#fff", border: "1px solid #eee", borderRadius: 6, padding: "14px", marginBottom: 14 },
+  reasonTitle: { fontSize: 13, fontWeight: 900, color: "#C45E00", margin: "0 0 8px" },
+  summaryBoxTitle: { fontSize: 13, fontWeight: 900, color: "#E86F00", margin: "0 0 6px" },
+  reasonTitleDark: { fontSize: 13, fontWeight: 800, color: "#333", margin: "0 0 7px" },
+  reasonItem: { fontSize: 14, color: "#555", lineHeight: 1.7, margin: 0, wordBreak: "keep-all" },
+  insightTextGroup: { display: "flex", flexDirection: "column", gap: 8 },
+  insightParagraph: { fontSize: 13.5, color: "#555", lineHeight: 1.75, margin: 0, wordBreak: "keep-all" },
+  panelActionGroup: { display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 },
+  panelSummaryBtn: { width: "100%", padding: "11px 12px", fontSize: 13.5, fontWeight: 800, color: "#E86F00", background: "#fff", border: "1px solid #E86F00", borderRadius: 2, cursor: "pointer", fontFamily: "inherit" },
   panelLink: { width: "100%", padding: "12px", fontSize: 14, fontWeight: 600, color: "#E86F00", background: "#fff", border: "1px solid #E86F00", borderRadius: 2, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "all 0.2s" },
 
   summaryPreviewHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14 },
