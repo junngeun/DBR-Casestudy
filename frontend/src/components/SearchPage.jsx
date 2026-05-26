@@ -1064,7 +1064,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
             </span>
             <div style={{ display: "flex", gap: 8 }}>
               <button style={styles.bottomBarBtnOutline} onClick={() => { setShowCompare(true); setSelectedCase(null); }}>케이스 비교하기</button>
-              <button style={styles.bottomBarBtnFill}>내보내기</button>
+              {/* <button style={styles.bottomBarBtnFill}>내보내기</button> */}
             </div>
           </div>
         </div>
@@ -1580,62 +1580,611 @@ function CaseSummaryModal({ caseData, onClose, onOpenOriginal }) {
   );
 }
 
-function CompareSidebar({ cases, onRemove, onClose }) {
+function CompareSidebar({ cases, onClose }) {
+  const [summaryCase, setSummaryCase] = useState(null);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportOptions, setExportOptions] = useState({
+    industry: true,
+    probMain: true,
+    solType: true,
+    date: true,
+    probDef: true,
+    solDetail: true,
+    recoReason: true,
+    summary: false,
+  });
+
+  const getCaseCompany = (caseData) => {
+    return caseData.company || caseData.comp_name || "-";
+  };
+
+  const getCaseYear = (caseData) => {
+    return caseData.date || (caseData.pub_year ? `${caseData.pub_year}년` : "-");
+  };
+
+  const getCaseReason = (caseData) => {
+    return caseData.reco_reason || caseData.reason_check || "추천 이유가 등록되지 않았습니다.";
+  };
+
+  const escapeHtml = (value) => {
+    return String(value ?? "-")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  };
+
+  const formatExportSummaryHtml = (summary) => {
+    return formatSummaryParagraphs(summary)
+      .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
+      .join("");
+  };
+
+  const openOriginalArticle = (caseData) => {
+    if (caseData?.src_url) {
+      window.open(caseData.src_url, "_blank", "noopener,noreferrer");
+    }
+  };
+
+  const toggleExportOption = (key) => {
+    setExportOptions((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+
+  const exportOptionList = [
+    { key: "industry", label: "산업 분야" },
+    { key: "probMain", label: "문제 유형" },
+    { key: "solType", label: "전략 유형" },
+    { key: "date", label: "발행일" },
+    { key: "probDef", label: "문제 정의" },
+    { key: "solDetail", label: "해결 전략" },
+    { key: "recoReason", label: "AI 추천 이유" },
+    { key: "summary", label: "요약문" },
+  ];
+
+  const compareRows = [
+    {
+      label: "기업명",
+      key: "company",
+      values: cases.map((c) => getCaseCompany(c)),
+    },
+    {
+      label: "산업 분야",
+      key: "industry",
+      values: cases.map((c) => c.industry || "-"),
+    },
+    {
+      label: "문제 유형",
+      key: "prob_main",
+      values: cases.map((c) => c.prob_main || "-"),
+    },
+    {
+      label: "전략 유형",
+      key: "sol_type",
+      values: cases.map((c) => c.sol_type || "-"),
+    },
+    {
+      label: "발행일",
+      key: "date",
+      values: cases.map((c) => getCaseYear(c)),
+    },
+    {
+      label: "문제 정의",
+      key: "prob_def",
+      values: cases.map((c) => c.prob_def || "-"),
+    },
+    {
+      label: "해결 전략",
+      key: "sol_detail",
+      values: cases.map((c) => c.sol_detail || "-"),
+    },
+    {
+      label: "AI 추천 이유",
+      key: "reco_reason",
+      values: cases.map((c) => (
+        <div style={styles.compareReasonBox}>
+          <p style={styles.compareReasonTitle}>[ AI 추천 이유 ]</p>
+          <p style={styles.compareReasonText}>→ {getCaseReason(c)}</p>
+        </div>
+      )),
+    },
+    {
+      label: "요약문",
+      key: "summary",
+      values: cases.map((c) => (
+        <button
+          type="button"
+          style={styles.compareSummaryBtn}
+          onClick={() => setSummaryCase(c)}
+        >
+          요약문 바로보기
+        </button>
+      )),
+    },
+  ];
+
+  const buildExportRows = () => {
+    const rows = [
+      {
+        label: "기업명",
+        valueGetter: (c) => escapeHtml(getCaseCompany(c)),
+      },
+    ];
+
+    if (exportOptions.industry) {
+      rows.push({
+        label: "산업 분야",
+        valueGetter: (c) => escapeHtml(c.industry || "-"),
+      });
+    }
+
+    if (exportOptions.probMain) {
+      rows.push({
+        label: "문제 유형",
+        valueGetter: (c) => escapeHtml(c.prob_main || "-"),
+      });
+    }
+
+    if (exportOptions.solType) {
+      rows.push({
+        label: "전략 유형",
+        valueGetter: (c) => escapeHtml(c.sol_type || "-"),
+      });
+    }
+
+    if (exportOptions.date) {
+      rows.push({
+        label: "발행일",
+        valueGetter: (c) => escapeHtml(getCaseYear(c)),
+      });
+    }
+
+    if (exportOptions.probDef) {
+      rows.push({
+        label: "문제 정의",
+        valueGetter: (c) => escapeHtml(c.prob_def || "-"),
+      });
+    }
+
+    if (exportOptions.solDetail) {
+      rows.push({
+        label: "해결 전략",
+        valueGetter: (c) => escapeHtml(c.sol_detail || "-"),
+      });
+    }
+
+    if (exportOptions.recoReason) {
+      rows.push({
+        label: "AI 추천 이유",
+        className: "reason-cell",
+        valueGetter: (c) => `
+          <div class="reason-box">
+            <p class="reason-title">[ AI 추천 이유 ]</p>
+            <p class="reason-text">→ ${escapeHtml(getCaseReason(c))}</p>
+          </div>
+        `,
+      });
+    }
+
+    if (exportOptions.summary) {
+      rows.push({
+        label: "요약문",
+        className: "summary-cell",
+        valueGetter: (c) => formatExportSummaryHtml(c.summary),
+      });
+    }
+
+    return rows;
+  };
+
+  const handleExportCompare = () => {
+    const printWindow = window.open("", "_blank", "width=1200,height=800");
+
+    if (!printWindow) {
+      alert("팝업이 차단되어 내보내기 창을 열 수 없습니다. 브라우저 팝업 허용 후 다시 시도해주세요.");
+      return;
+    }
+
+    const selectedRows = buildExportRows();
+
+    const rowHtml = selectedRows
+      .map(
+        (row) => `
+          <tr>
+            <th>${escapeHtml(row.label)}</th>
+            ${cases
+              .map((caseItem) => `<td class="${row.className || ""}">${row.valueGetter(caseItem)}</td>`)
+              .join("")}
+          </tr>
+        `
+      )
+      .join("");
+
+    const includedLabels = selectedRows.map((row) => row.label).join(", ");
+
+    const printContent = `
+      <!doctype html>
+      <html lang="ko">
+        <head>
+          <meta charset="utf-8" />
+          <title>DBR Case Atlas - 케이스 비교</title>
+          <style>
+            * { box-sizing: border-box; }
+            body {
+              margin: 0;
+              padding: 34px 42px;
+              font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", Arial, sans-serif;
+              color: #1a1a1a;
+              background: #fff;
+            }
+            .eyebrow {
+              margin: 0 0 6px;
+              font-size: 12px;
+              font-weight: 900;
+              letter-spacing: 0.12em;
+              color: #E86F00;
+            }
+            h1 {
+              margin: 0 0 8px;
+              font-size: 28px;
+              line-height: 1.3;
+            }
+            .desc {
+              margin: 0 0 8px;
+              font-size: 14px;
+              color: #666;
+              line-height: 1.6;
+            }
+            .included {
+              margin: 0 0 18px;
+              font-size: 12px;
+              color: #999;
+              line-height: 1.6;
+            }
+            .bar {
+              height: 2px;
+              background: #E86F00;
+              margin: 18px 0 18px;
+            }
+            table {
+              width: 100%;
+              table-layout: fixed;
+              border-collapse: collapse;
+              border: 1px solid #e6e6e6;
+            }
+            th, td {
+              border: 1px solid #e6e6e6;
+              padding: 14px 14px;
+              vertical-align: top;
+              font-size: 13px;
+              line-height: 1.7;
+              word-break: keep-all;
+            }
+            th {
+              width: 120px;
+              background: #fafafa;
+              color: #555;
+              font-weight: 800;
+              text-align: left;
+            }
+            .case-head { background: #fcfcfc; }
+            .case-rank {
+              display: inline-block;
+              margin-right: 8px;
+              color: #E86F00;
+              font-weight: 900;
+            }
+            .case-title {
+              font-weight: 900;
+              line-height: 1.55;
+            }
+            .case-company {
+              margin-top: 8px;
+              color: #999;
+              font-size: 12px;
+              font-weight: 600;
+            }
+            .reason-box {
+              border: 1px solid #f5cbb8;
+              background: #FEF0E9;
+              border-radius: 8px;
+              padding: 12px 13px;
+            }
+            .reason-title {
+              margin: 0 0 6px;
+              color: #E86F00;
+              font-size: 12px;
+              font-weight: 900;
+            }
+            .reason-text {
+              margin: 0;
+              color: #444;
+              line-height: 1.75;
+            }
+            .summary-cell p {
+              margin: 0 0 10px;
+              color: #333;
+              line-height: 1.8;
+              word-break: keep-all;
+            }
+            .summary-cell p:last-child { margin-bottom: 0; }
+            @media print {
+              body { padding: 24px; }
+              tr { page-break-inside: avoid; page-break-after: auto; }
+            }
+          </style>
+        </head>
+        <body>
+          <p class="eyebrow">DBR CASE ATLAS</p>
+          <h1>케이스 비교</h1>
+          <p class="desc">선택한 ${cases.length}개 케이스의 공통점과 차이점을 정리한 비교표입니다.</p>
+          <p class="included">포함 항목: ${escapeHtml(includedLabels)}</p>
+          <div class="bar"></div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>비교 항목</th>
+                ${cases
+                  .map(
+                    (caseItem, index) => `
+                      <td class="case-head">
+                        <div class="case-title"><span class="case-rank">${index + 1}</span>${escapeHtml(caseItem.title || "-")}</div>
+                        <div class="case-company">${escapeHtml(getCaseCompany(caseItem))}</div>
+                      </td>
+                    `
+                  )
+                  .join("")}
+              </tr>
+            </thead>
+            <tbody>
+              ${rowHtml}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    printWindow.focus();
+
+    setTimeout(() => {
+      printWindow.print();
+    }, 350);
+  };
+
+  const handleOpenExportModal = () => {
+    setShowExportModal(true);
+  };
+
+  const handleConfirmExport = () => {
+    setShowExportModal(false);
+    handleExportCompare();
+  };
+
+  const renderExportToggle = (option) => {
+    const isChecked = !!exportOptions[option.key];
+
+    return (
+      <button
+        key={option.key}
+        type="button"
+        style={styles.exportOptionItem}
+        onClick={() => toggleExportOption(option.key)}
+      >
+        <span style={styles.exportOptionText}>{option.label}</span>
+        <span
+          style={{
+            ...styles.exportSwitch,
+            background: isChecked ? "#E86F00" : "#d5d5d5",
+          }}
+        >
+          <span
+            style={{
+              ...styles.exportSwitchCircle,
+              transform: isChecked ? "translateX(18px)" : "translateX(0)",
+            }}
+          />
+        </span>
+      </button>
+    );
+  };
+
   return (
     <>
-      <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", zIndex: 500 }} onClick={onClose} />
-      <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "90%", maxWidth: 1100, maxHeight: "85vh", background: "#fff", borderRadius: 16, zIndex: 600, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-        <div style={{ background: "#e0e0e0", padding: "1.5rem 2rem" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <div>
-              <h2 style={{ fontSize: 22, fontWeight: 700, color: "#1a1a1a", marginBottom: 4 }}>케이스 비교</h2>
-              <p style={{ fontSize: 15, color: "#666" }}>선택한 {cases.length}개 케이스의 공통점과 차이점을 확인하세요</p>
-            </div>
-            <button style={{ background: "rgba(232, 90, 24, 0.1)", border: "none", borderRadius: "50%", width: 32, height: 32, fontSize: 16, color: "#E86F00", cursor: "pointer" }} onClick={onClose}>✕</button>
+      <div style={styles.compareOverlay} onClick={onClose} />
+
+      <div style={styles.compareModal}>
+        <div style={styles.compareHeader}>
+          <div>
+            <h2 style={styles.compareTitle}>케이스 비교</h2>
+            <p style={styles.compareSubTitle}>
+              선택한 {cases.length}개 케이스의 공통점과 차이점을 확인하세요.
+            </p>
           </div>
+
+          <button type="button" style={styles.compareCloseBtn} onClick={onClose}>
+            ✕
+          </button>
         </div>
-        <div style={{ overflowY: "auto", flex: 1 }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+
+        <div style={styles.compareTableWrap}>
+          <table style={styles.compareTable}>
+            <colgroup>
+              <col style={{ width: "124px" }} />
+              {cases.map((c, i) => (
+                <col
+                  key={`compare-col-${c.case_idx || c.id || c.title || i}`}
+                  style={{ width: `calc((100% - 124px) / ${Math.max(cases.length, 1)})` }}
+                />
+              ))}
+            </colgroup>
+
             <thead>
-              <tr style={{ borderBottom: "1px solid #e8e8e8" }}>
-                <th style={{ padding: "14px 16px", fontSize: 13, color: "#999", fontWeight: 500, textAlign: "left", width: 100, background: "#fafafa" }}>비교 항목</th>
+              <tr style={styles.compareHeaderRow}>
+                <th style={styles.compareLabelHead}>비교 항목</th>
                 {cases.map((c, i) => (
-                  <th key={c.title || c.rank} style={{ padding: "14px 16px", textAlign: "left", background: "#fafafa", borderLeft: "1px solid #e8e8e8" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: "#E86F00" }}>{i + 1}</div>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: "#1a1a1a" }}>{c.title}</span>
+                  <th
+                    key={c.case_idx || c.id || c.title || i}
+                    style={styles.compareCaseHead}
+                  >
+                    <div style={styles.compareCaseHeadInner}>
+                      <span style={styles.compareCaseNum}>{i + 1}</span>
+                      <div style={{ minWidth: 0 }}>
+                        <p style={styles.compareCaseTitle}>{c.title}</p>
+                        <p style={styles.compareCaseCompany}>{getCaseCompany(c)}</p>
+                      </div>
                     </div>
                   </th>
                 ))}
               </tr>
             </thead>
+
             <tbody>
-              {[
-                { label: "산업 분야", key: "industry", values: cases.map((c) => c.industry) },
-                { label: "문제 유형", key: "prob_main", values: cases.map((c) => c.prob_main ?? "-") },
-                { label: "전략 유형", key: "sol_type", values: cases.map((c) => c.sol_type ?? "-") },
-                { label: "발행일", key: "date", values: cases.map((c) => c.date ?? "-") },
-                { label: "분석 요약", key: "summary", values: cases.map((c) => <p style={{ fontSize: 12, color: "#555", lineHeight: 1.6 }}>{c.summary}</p>) },
-              ].map((row) => (
-                <tr key={row.key} style={{ borderBottom: "1px solid #f0f0f0" }}>
-                  <td style={{ padding: "14px 16px", fontSize: 13, color: "#666", fontWeight: 500, background: "#fafafa", verticalAlign: "top" }}>{row.label}</td>
+              {compareRows.map((row) => (
+                <tr key={row.key} style={styles.compareRow}>
+                  <td style={styles.compareLabelCell}>{row.label}</td>
                   {row.values.map((val, i) => (
-                    <td key={i} style={{ padding: "14px 16px", fontSize: 13, color: "#1a1a1a", borderLeft: "1px solid #f0f0f0", verticalAlign: "top" }}>{val}</td>
+                    <td key={`${row.key}-${i}`} style={styles.compareValueCell}>
+                      {val}
+                    </td>
                   ))}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <div style={{ padding: "1rem 2rem", borderTop: "1px solid #e8e8e8", display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <button style={{ padding: "10px 20px", fontSize: 13, color: "#666", background: "#fff", border: "1px solid #e0e0e0", borderRadius: 8, cursor: "pointer", fontFamily: "inherit" }} onClick={onClose}>닫기</button>
+
+        <div style={styles.compareFooter}>
+          <button type="button" style={styles.compareFooterBtn} onClick={onClose}>
+            닫기
+          </button>
+          <button
+            type="button"
+            style={styles.compareExportBtn}
+            onClick={handleOpenExportModal}
+          >
+            내보내기
+          </button>
         </div>
       </div>
+
+      {showExportModal && (
+        <>
+          <div
+            style={styles.exportModalOverlay}
+            onClick={() => setShowExportModal(false)}
+          />
+
+          <div style={styles.exportModal}>
+            <div style={styles.exportModalHeader}>
+              <div>
+                <p style={styles.exportModalLabel}>PDF 내보내기 설정</p>
+                <h3 style={styles.exportModalTitle}>포함할 비교 항목 선택</h3>
+                <p style={styles.exportModalDesc}>
+                  {/* 기업명은 기본 항목이라 항상 포함됩니다. 요약문은 길어질 수 있어 기본 제외 상태입니다. */}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                style={styles.exportModalCloseBtn}
+                onClick={() => setShowExportModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={styles.exportFixedItem}>
+              <span style={styles.exportFixedText}>기업명</span>
+              {/* <span style={styles.exportFixedBadge}></span> */}
+            </div>
+
+            <div style={styles.exportOptionGrid}>
+              {exportOptionList.map(renderExportToggle)}
+            </div>
+
+            <div style={styles.exportModalFooter}>
+              <button
+                type="button"
+                style={styles.exportCancelBtn}
+                onClick={() => setShowExportModal(false)}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                style={styles.exportConfirmBtn}
+                onClick={handleConfirmExport}
+              >
+                PDF로 내보내기
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {summaryCase && (
+        <CaseSummaryModal
+          caseData={summaryCase}
+          onClose={() => setSummaryCase(null)}
+          onOpenOriginal={() => openOriginalArticle(summaryCase)}
+        />
+      )}
     </>
   );
 }
 
+
 const styles = {
+  compareOverlay: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", zIndex: 500 },
+  compareModal: { position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "92%", maxWidth: 1180, maxHeight: "86vh", background: "#fff", borderRadius: 16, zIndex: 600, overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 18px 50px rgba(0,0,0,0.18)" },
+  compareHeader: { background: "#f3f3f3", padding: "1.5rem 2rem", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 20 },
+  compareTitle: { fontSize: 22, fontWeight: 800, color: "#1a1a1a", margin: "0 0 6px" },
+  compareSubTitle: { fontSize: 15, color: "#666", margin: 0 },
+  compareCloseBtn: { background: "rgba(232, 111, 0, 0.1)", border: "none", borderRadius: "50%", width: 34, height: 34, fontSize: 16, color: "#E86F00", cursor: "pointer", flexShrink: 0 },
+  compareTableWrap: { overflowY: "auto", flex: 1 },
+  compareTable: { width: "100%", borderCollapse: "collapse", tableLayout: "fixed" },
+  compareHeaderRow: { borderBottom: "1px solid #e8e8e8" },
+  compareLabelHead: { padding: "15px 16px", fontSize: 13, color: "#999", fontWeight: 700, textAlign: "left", background: "#fafafa", verticalAlign: "top" },
+  compareCaseHead: { padding: "15px 16px", textAlign: "left", background: "#fafafa", borderLeft: "1px solid #e8e8e8", verticalAlign: "top" },
+  compareCaseHeadInner: { display: "flex", alignItems: "flex-start", gap: 9, minWidth: 0 },
+  compareCaseNum: { fontSize: 16, fontWeight: 900, color: "#E86F00", lineHeight: 1.4, flexShrink: 0 },
+  compareCaseTitle: { fontSize: 13.5, fontWeight: 800, color: "#1a1a1a", lineHeight: 1.55, wordBreak: "keep-all", margin: 0 },
+  compareCaseCompany: { fontSize: 12, color: "#999", fontWeight: 600, margin: "6px 0 0", lineHeight: 1.4 },
+  compareRow: { borderBottom: "1px solid #f0f0f0" },
+  compareLabelCell: { padding: "15px 16px", fontSize: 13, color: "#666", fontWeight: 700, background: "#fafafa", verticalAlign: "top" },
+  compareValueCell: { padding: "15px 16px", fontSize: 13.5, color: "#1a1a1a", borderLeft: "1px solid #f0f0f0", verticalAlign: "top", lineHeight: 1.65, wordBreak: "keep-all" },
+  compareReasonBox: { background: "#FEF0E9", border: "1px solid #F7D8C6", borderRadius: 8, padding: "12px 13px" },
+  compareReasonTitle: { fontSize: 12, fontWeight: 900, color: "#E86F00", margin: "0 0 6px" },
+  compareReasonText: { fontSize: 13, color: "#555", lineHeight: 1.7, margin: 0, wordBreak: "keep-all" },
+  compareSummaryBtn: { padding: "9px 13px", fontSize: 13, fontWeight: 800, color: "#E86F00", background: "#fff", border: "1px solid #E86F00", borderRadius: 4, cursor: "pointer", fontFamily: "inherit" },
+  compareFooter: { padding: "1rem 2rem", borderTop: "1px solid #e8e8e8", display: "flex", justifyContent: "flex-end", gap: 8, background: "#fff" },
+  compareFooterBtn: { padding: "10px 20px", fontSize: 13, color: "#666", background: "#fff", border: "1px solid #e0e0e0", borderRadius: 8, cursor: "pointer", fontFamily: "inherit" },
+  compareExportBtn: { padding: "10px 20px", fontSize: 13, color: "#fff", background: "#E86F00", border: "1px solid #E86F00", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontWeight: 800 },
+  exportModalOverlay: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.45)", zIndex: 800 },
+  exportModal: { position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "min(560px, calc(100vw - 40px))", background: "#fff", borderRadius: 16, zIndex: 900, boxShadow: "0 18px 50px rgba(0,0,0,0.22)", overflow: "hidden" },
+  exportModalHeader: { padding: "24px 28px 18px", borderBottom: "1px solid #f0f0f0", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 },
+  exportModalLabel: { margin: "0 0 6px", fontSize: 12, fontWeight: 900, color: "#E86F00", letterSpacing: "0.08em" },
+  exportModalTitle: { margin: "0 0 8px", fontSize: 21, fontWeight: 900, color: "#1a1a1a" },
+  exportModalDesc: { margin: 0, fontSize: 13, color: "#666", lineHeight: 1.6 },
+  exportModalCloseBtn: { background: "rgba(232, 111, 0, 0.1)", border: "none", borderRadius: "50%", width: 32, height: 32, fontSize: 15, color: "#E86F00", cursor: "pointer", flexShrink: 0 },
+  exportFixedItem: { margin: "18px 28px 10px", padding: "13px 14px", borderRadius: 10, background: "#fafafa", border: "1px solid #eee", display: "flex", justifyContent: "space-between", alignItems: "center" },
+  exportFixedText: { fontSize: 14, fontWeight: 800, color: "#1a1a1a" },
+  exportFixedBadge: { fontSize: 12, fontWeight: 800, color: "#E86F00", background: "#FEF0E9", padding: "5px 8px", borderRadius: 999 },
+  exportOptionGrid: { padding: "8px 28px 24px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 },
+  exportOptionItem: { width: "100%", padding: "12px 13px", border: "1px solid #eee", borderRadius: 10, background: "#fff", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", fontFamily: "inherit" },
+  exportOptionText: { fontSize: 13.5, fontWeight: 700, color: "#333" },
+  exportSwitch: { width: 42, height: 24, borderRadius: 999, padding: 3, display: "flex", alignItems: "center", transition: "all 0.2s", flexShrink: 0 },
+  exportSwitchCircle: { width: 18, height: 18, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 4px rgba(0,0,0,0.2)", transition: "transform 0.2s" },
+  exportModalFooter: { padding: "16px 28px 24px", borderTop: "1px solid #f0f0f0", display: "flex", justifyContent: "flex-end", gap: 8 },
+  exportCancelBtn: { padding: "10px 18px", fontSize: 13, color: "#666", background: "#fff", border: "1px solid #ddd", borderRadius: 8, cursor: "pointer", fontFamily: "inherit" },
+  exportConfirmBtn: { padding: "10px 18px", fontSize: 13, color: "#fff", background: "#E86F00", border: "1px solid #E86F00", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontWeight: 800 },
   topSearchLayout: { width: "min(1600px, calc(100vw - 96px))", margin: "0 auto", padding: "2.5rem 0 0", display: "grid", gridTemplateColumns: "minmax(840px, 1fr) 560px", gap: 24, alignItems: "start", boxSizing: "border-box" },
   searchMainCol: { minWidth: 0 },
   popularSideCol: { position: "sticky", top: 96, minWidth: 0 },
