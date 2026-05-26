@@ -77,8 +77,8 @@ export default function RequestPage({ onBack }) {
         body: JSON.stringify({ member_idx: member.member_idx })
       });
 
-      if (res.ok) {
-        fetchRequests(); // 반영 후 목록 갱신 (서버에서 받아온 is_liked 상태로 버튼 색상 자동 변경됨)
+      if (!res.ok) {
+        console.error("좋아요 처리 실패");
       }
     } catch (err) {
       console.error("좋아요 처리 실패:", err);
@@ -147,18 +147,35 @@ export default function RequestPage({ onBack }) {
                 <h4 style={styles.feedTopic}>{req.topic}</h4>
                 <p style={styles.feedContent}>{req.content}</p>
                 <div style={styles.feedCardBottom}>
-                  <button 
-                    onClick={() => handleLike(req.request_idx)}
-                    style={{ 
-                      ...styles.likeBtn,
-                      // 공감 상태(is_liked)에 따라 색상 자동 변경
-                      backgroundColor: req.is_liked ? "#FEF0E9" : "#fff",
-                      borderColor: req.is_liked ? "#E86F00" : "#e0e0e0",
-                      color: req.is_liked ? "#E86F00" : "#666"
-                    }}
-                  >
-                    공감 {req.likes}
-                  </button>
+                  {/* === 클릭 시 주황 배경에 흰 글씨로 반전되는 버튼 === */}
+                <button 
+                  onClick={() => {
+                    setRequests(prev => prev.map(item => {
+                      if (item.request_idx !== req.request_idx) return item;
+
+                      const isLiked = item.is_liked === true || item.is_liked === 1 || item.is_liked === "1";
+
+                      return {
+                        ...item,
+                        is_liked: !isLiked,
+                        likes: isLiked ? item.likes - 1 : item.likes + 1
+                      };
+                    }));
+
+                    handleLike(req.request_idx);
+                  }}
+                  style={{ 
+                    ...styles.likeBtn,
+                    backgroundColor: (req.is_liked === true || req.is_liked === 1 || req.is_liked === "1") ? "#E86F00" : "#fff",
+                    color: (req.is_liked === true || req.is_liked === 1 || req.is_liked === "1") ? "#fff" : "#666",
+                    border: (req.is_liked === true || req.is_liked === 1 || req.is_liked === "1") 
+                      ? "1px solid #E86F00" 
+                      : "1px solid #e0e0e0",
+                    outline: "none"
+                  }}
+                >
+                  공감 {req.likes}
+                </button>
                 </div>
               </div>
             ))}
@@ -198,5 +215,18 @@ const styles = {
   feedTopic: { fontSize: 16, fontWeight: 700, color: "#1a1a1a", marginBottom: 10 },
   feedContent: { fontSize: 14, color: "#555", lineHeight: 1.6 },
   feedCardBottom: { display: "flex", justifyContent: "flex-end", borderTop: "1px solid #f0f0f0", paddingTop: 16 },
-  likeBtn: { background: "#fff", border: "1px solid #e0e0e0", borderRadius: 6, padding: "6px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "0.2s" }
+  
+  likeBtn: { 
+    background: "#fff", 
+    border: "1px solid #e0e0e0", 
+    borderRadius: 6, 
+    padding: "6px 14px", 
+    fontSize: 13, 
+    fontWeight: 700, 
+    cursor: "pointer", 
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    transition: "all 0.2s ease-in-out" 
+  }
 };
