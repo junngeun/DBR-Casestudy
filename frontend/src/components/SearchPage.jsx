@@ -563,6 +563,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
       const queryMeta = data.query_meta || {};
       const resultStatus = data.result_status || {};
       const recommendations = data.recommendations || [];
+      const mapCandidatesRaw = Array.isArray(data.map_candidates) ? data.map_candidates : [];
 
       if (queryMeta.is_valid_business_query === false || recommendations.length === 0) {
         const noticeMessage =
@@ -582,6 +583,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
             message: noticeMessage,
           },
           cases: [],
+          map_candidates: [],
         });
 
         setInvalidNotice(noticeMessage);
@@ -633,6 +635,64 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
         perf_dir: item.perf_dir,
         x: item.x,
         y: item.y,
+        dynamic_x: item.dynamic_x,
+        dynamic_y: item.dynamic_y,
+        map_group: item.map_group || "recommended",
+        map_distance: item.map_distance,
+        map_rank: item.map_rank,
+        map_angle: item.map_angle,
+
+        meta_sim: item.meta_sim,
+        summary_sim: item.summary_sim,
+        metadata_bonus: item.metadata_bonus,
+        base_score: item.base_score,
+        gpt_relevance_score: item.gpt_relevance_score,
+        condition_match: item.condition_match,
+        raw_final_score: item.raw_final_score,
+        final_score: item.final_score,
+        reco_reason: item.reco_reason,
+        reason_check: item.reason_check,
+        personal_strategy: null,
+        personal_strategy_status: null,
+      }));
+
+
+      const mappedMapCandidates = (mapCandidatesRaw.length > 0 ? mapCandidatesRaw : recommendations).map((item, index) => ({
+        id: item.case_idx,
+        rank: item.ranking || item.rank || null,
+        case_idx: item.case_idx,
+        title: item.title,
+        company: item.comp_name || item.company,
+        industry: item.industry,
+        date: item.pub_year ? `${item.pub_year}년` : "",
+        tags: [item.prob_main, item.prob_keyword, item.sol_type].filter(Boolean),
+        summary: item.summary,
+        similarity: item.final_score != null
+          ? Math.round(Number(item.final_score) * 100)
+          : item.similarity ?? null,
+        isRecommended: item.is_recommended === true || item.isRecommended === true || item.map_group === "recommended" || (item.ranking != null && Number(item.ranking) <= 5),
+
+        chapter_title: item.chapter_title,
+        src_url: item.src_url,
+        issue_no: item.issue_no,
+        pub_year: item.pub_year,
+        comp_name: item.comp_name || item.company,
+        comp_size: item.comp_size,
+        prob_main: item.prob_main,
+        prob_keyword: item.prob_keyword,
+        prob_def: item.prob_def,
+        sol_type: item.sol_type,
+        sol_detail: item.sol_detail,
+        perf_type: item.perf_type,
+        perf_dir: item.perf_dir,
+        x: item.x,
+        y: item.y,
+        dynamic_x: item.dynamic_x,
+        dynamic_y: item.dynamic_y,
+        map_group: item.map_group || (item.is_recommended ? "recommended" : "candidate"),
+        map_distance: item.map_distance,
+        map_rank: item.map_rank,
+        map_angle: item.map_angle,
 
         meta_sim: item.meta_sim,
         summary_sim: item.summary_sim,
@@ -673,6 +733,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
         query_meta: queryMeta,
         result_status: resultStatus,
         cases: mappedCases,
+        map_candidates: mappedMapCandidates,
       });
 
       if (onSearch) {
@@ -866,6 +927,10 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
       rank: matched.rank,
       similarity: matched.similarity,
       isRecommended: true,
+      dynamic_x: matched.dynamic_x,
+      dynamic_y: matched.dynamic_y,
+      map_group: matched.map_group,
+      map_distance: matched.map_distance,
     };
   });
 
@@ -1195,6 +1260,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
           <div style={styles.mapCol}>
             <CaseMap
               cases={mapCases}
+              mapCandidates={result?.map_candidates || []}
               highlightedIds={recommendedCaseIds}
               focusCaseId={selectedCase?.case_idx || selectedCase?.id || null}
               onCaseClick={(caseData) => handleCaseSelect(caseData, "map")}

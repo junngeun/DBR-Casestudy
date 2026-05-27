@@ -107,6 +107,13 @@ class RecommendationItem(BaseModel):
     x: Optional[int] = None
     y: Optional[int] = None
 
+    # 검색어 기준 동적 좌표 맵용 필드
+    dynamic_x: Optional[int] = None
+    dynamic_y: Optional[int] = None
+    map_distance: Optional[float] = None
+    map_group: Optional[str] = None
+    map_rank: Optional[int] = None
+
     meta_sim: float
     summary_sim: float
     metadata_bonus: float
@@ -119,12 +126,50 @@ class RecommendationItem(BaseModel):
     reason_check: str
 
 
+class DynamicMapItem(BaseModel):
+    """검색 결과 맵에 표시할 후보 케이스.
+
+    recommendations는 최종 TOP5만 담고, map_candidates는 동적 좌표 맵에
+    배경 점으로 함께 표시할 상위 후보군까지 담는다.
+    """
+    case_idx: int
+    ranking: Optional[int] = None
+
+    title: Optional[str] = None
+    summary: Optional[str] = None
+    comp_name: Optional[str] = None
+    industry: Optional[str] = None
+
+    prob_main: Optional[str] = None
+    prob_keyword: Optional[str] = None
+    sol_type: Optional[str] = None
+    perf_type: Optional[str] = None
+    perf_dir: Optional[str] = None
+
+    x: Optional[int] = None
+    y: Optional[int] = None
+    dynamic_x: Optional[int] = None
+    dynamic_y: Optional[int] = None
+
+    map_distance: Optional[float] = None
+    map_group: str = "candidate"
+    map_rank: Optional[int] = None
+    is_recommended: bool = False
+
+    meta_sim: Optional[float] = None
+    summary_sim: Optional[float] = None
+    final_score: Optional[float] = None
+    condition_match: Optional[str] = None
+    reco_reason: Optional[str] = None
+
+
 class RecommendResponse(BaseModel):
     query: str
     e5_query: str
     query_meta: Dict[str, Any]
     result_status: ResultStatus
     recommendations: List[RecommendationItem]
+    map_candidates: List[DynamicMapItem] = Field(default_factory=list)
 
 
 class PersonalStrategyCase(BaseModel):
@@ -504,7 +549,9 @@ def search_candidates_from_db(query_embedding: np.ndarray, top_k: int = 80) -> L
                 perf_type,
                 perf_dir,
                 x,
-                y
+                y,
+                meta_embedding::text AS meta_embedding_text,
+                summary_embedding::text AS summary_embedding_text
             FROM t_case
             WHERE case_idx = ANY(%s::bigint[]);
             """
@@ -881,7 +928,247 @@ condition_match 기준:
 
 
 # ============================================================
-# 9. 최종 점수 / 추천 상태
+# 9. 검색어 기준 동적 좌표 맵
+# ============================================================
+
+def pgvector_text_to_np(value: Any) -> Optional[np.ndarray]:
+    """PostgreSQL pgvector의 text 표현('[0.1,0.2,...]')을 numpy 배열로 변환한다."""
+    if value is None:
+        return None
+
+    if isinstance(value, np.ndarray):
+        return value.astype("float32")
+
+    text = safe_str(value).strip()
+    if not text:
+        return None
+
+    if text.startswith("[") and text.endswith("]"):
+        text = text[1:-1]
+
+    try:
+        arr = np.fromstring(text, sep=",", dtype=np.float32)
+        if arr.size == 0:
+            return None
+        return arr
+    except Exception:
+        return None
+
+
+def choose_map_embedding(row: Dict[str, Any]) -> Optional[np.ndarray]:
+    """동적 좌표 계산에는 케이스 내용성이 강한 summary_embedding을 우선 사용한다."""
+    summary_vec = pgvector_text_to_np(row.get("summary_embedding_text"))
+    if summary_vec is not None:
+        return summary_vec
+
+    meta_vec = pgvector_text_to_np(row.get("meta_embedding_text"))
+    if meta_vec is not None:
+        return meta_vec
+
+    return None
+
+
+def normalize_dynamic_coordinates(
+    query_coord: np.ndarray,
+    case_coords: np.ndarray,
+    rows: List[Dict[str, Any]],
+    min_radius: float = 72.0,
+    max_radius: float = 430.0
+) -> List[Dict[str, float]]:
+    """검색어 중심 동적 좌표를 생성한다.
+
+    중요한 설계 원칙:
+    - 추천 순위/최종점수가 높을수록 반드시 중심에 가깝게 둔다.
+    - PCA는 '방향'을 잡는 데만 사용한다.
+    - 중심과의 거리는 final_score 기준 순위로 결정한다.
+
+    이렇게 해야 사용자가 "중심에 가까울수록 현재 고민과 유사하다"고 이해할 수 있다.
+    """
+    if case_coords.size == 0 or not rows:
+        return []
+
+    relative = case_coords - query_coord.reshape(1, 2)
+    n = len(rows)
+    max_rank = max(n, 1)
+
+    result = []
+    used_angles = []
+
+    for index, row in enumerate(rows):
+        rank = index + 1
+        x, y = relative[index]
+
+        # PCA 방향이 유효하면 사용하고, 거의 0이면 golden angle로 분산한다.
+        if np.isfinite(x) and np.isfinite(y) and (abs(float(x)) + abs(float(y))) > 1e-8:
+            angle = float(np.arctan2(float(y), float(x)))
+        else:
+            angle = float((index * 2.399963229728653) % (2 * np.pi))
+
+        # 각도가 너무 몰릴 때 약간의 분산을 준다. 좌표의 의미보다 가독성을 우선한다.
+        if used_angles:
+            close_count = sum(1 for a in used_angles if abs(np.arctan2(np.sin(angle - a), np.cos(angle - a))) < 0.16)
+            angle += close_count * 0.18
+        used_angles.append(angle)
+
+        # 순위 기반 반지름. TOP일수록 무조건 중심에 가깝다.
+        if rank == 1:
+            radius = 82
+        elif rank <= 5:
+            radius = 122 + (rank - 2) * 28
+        elif rank <= 20:
+            radius = 230 + (rank - 6) * 8.5
+        else:
+            radius = 360 + min(rank - 21, 30) * 2.6
+
+        # 낮은 점수 후보는 살짝 바깥으로 보정한다.
+        try:
+            final_score = float(row.get('final_score', row.get('base_score', 0)) or 0)
+        except Exception:
+            final_score = 0.0
+        score_penalty = (1 - max(0.0, min(1.0, final_score))) * 36
+        radius = min(max_radius, max(min_radius, radius + score_penalty))
+
+        px = 500.0 + np.cos(angle) * radius
+        py = 500.0 - np.sin(angle) * radius
+
+        px = max(70, min(930, px))
+        py = max(70, min(930, py))
+
+        result.append({
+            'dynamic_x': int(round(px)),
+            'dynamic_y': int(round(py)),
+            # map_distance는 화면상 중심 거리 기준으로 제공한다.
+            'map_distance': round(float(radius / max_radius), 4),
+            'map_angle': round(float(angle), 4),
+        })
+
+    return result
+
+
+def fallback_radial_coordinates(rows: List[Dict[str, Any]]) -> None:
+    """PCA 실패 시에도 순위가 높을수록 중심에 가까운 방사형 배치를 만든다."""
+    if not rows:
+        return
+
+    n = len(rows)
+    for index, row in enumerate(rows):
+        rank = index + 1
+        angle = (index * 2.399963229728653) % (2 * np.pi)
+
+        if rank == 1:
+            radius = 82
+        elif rank <= 5:
+            radius = 122 + (rank - 2) * 28
+        elif rank <= 20:
+            radius = 230 + (rank - 6) * 8.5
+        else:
+            radius = 360 + min(rank - 21, 30) * 2.6
+
+        row['dynamic_x'] = int(round(500 + np.cos(angle) * radius))
+        row['dynamic_y'] = int(round(500 - np.sin(angle) * radius))
+        row['map_distance'] = round(float(radius / 430), 4)
+        row['map_angle'] = round(float(angle), 4)
+
+
+def add_dynamic_map_coordinates(
+    query_embedding: np.ndarray,
+    sorted_candidates: List[Dict[str, Any]],
+    final_results: List[Dict[str, Any]],
+    map_k: int = 50
+) -> List[Dict[str, Any]]:
+    """검색어 기준 동적 좌표를 후보군에 추가한다.
+
+    - 기존 DB 좌표 x/y는 건드리지 않는다.
+    - dynamic_x/dynamic_y만 새로 추가한다.
+    - 추천 순위가 높을수록 중심에 더 가깝다.
+    - PCA는 좌표의 방향성만 잡고, 중심 거리는 final_score 순위로 결정한다.
+    """
+    map_rows = sorted_candidates[:min(map_k, len(sorted_candidates))]
+    recommended_ids = {int(row['case_idx']) for row in final_results}
+    rank_map = {int(row['case_idx']): int(row.get('ranking', idx + 1)) for idx, row in enumerate(final_results)}
+
+    for index, row in enumerate(map_rows, start=1):
+        row['map_rank'] = index
+
+    usable_rows: List[Dict[str, Any]] = []
+    vectors: List[np.ndarray] = []
+
+    for row in map_rows:
+        vec = choose_map_embedding(row)
+        if vec is None:
+            continue
+        if vec.shape[0] != query_embedding.shape[0]:
+            continue
+        usable_rows.append(row)
+        vectors.append(vec.astype('float32'))
+
+    if len(usable_rows) >= 2:
+        matrix = np.vstack([query_embedding.astype('float32')] + vectors)
+        centered = matrix - matrix.mean(axis=0, keepdims=True)
+        try:
+            _, _, vt = np.linalg.svd(centered, full_matrices=False)
+            components = vt[:2].T
+            coords_2d = centered @ components
+            if coords_2d.shape[1] < 2:
+                raise ValueError('PCA 2D 좌표 생성 실패')
+
+            query_coord = coords_2d[0]
+            case_coords = coords_2d[1:]
+            normalized = normalize_dynamic_coordinates(query_coord, case_coords, usable_rows)
+            for row, coord in zip(usable_rows, normalized):
+                row.update(coord)
+        except Exception as e:
+            print(f'동적 좌표 PCA 계산 실패, 순위 기반 원형 배치로 대체: {e}')
+            fallback_radial_coordinates(usable_rows)
+    else:
+        fallback_radial_coordinates(map_rows)
+
+    missing_rows = [row for row in map_rows if row.get('dynamic_x') is None or row.get('dynamic_y') is None]
+    if missing_rows:
+        fallback_radial_coordinates(missing_rows)
+
+    for index, row in enumerate(map_rows, start=1):
+        case_idx = int(row['case_idx'])
+        row['map_rank'] = index
+        row['map_group'] = 'recommended' if case_idx in recommended_ids else 'candidate'
+        row['is_recommended'] = case_idx in recommended_ids
+        if case_idx in rank_map:
+            row['ranking'] = rank_map[case_idx]
+
+    return map_rows
+
+def build_dynamic_map_item(row: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "case_idx": int(row["case_idx"]),
+        "ranking": row.get("ranking"),
+        "title": row.get("title"),
+        "summary": row.get("summary"),
+        "comp_name": row.get("comp_name"),
+        "industry": row.get("industry"),
+        "prob_main": row.get("prob_main"),
+        "prob_keyword": row.get("prob_keyword"),
+        "sol_type": row.get("sol_type"),
+        "perf_type": row.get("perf_type"),
+        "perf_dir": row.get("perf_dir"),
+        "x": row.get("x"),
+        "y": row.get("y"),
+        "dynamic_x": row.get("dynamic_x"),
+        "dynamic_y": row.get("dynamic_y"),
+        "map_distance": row.get("map_distance"),
+        "map_angle": row.get("map_angle"),
+        "map_group": row.get("map_group", "candidate"),
+        "map_rank": row.get("map_rank"),
+        "is_recommended": bool(row.get("is_recommended", False)),
+        "meta_sim": round(float(row.get("meta_sim", 0)), 4),
+        "summary_sim": round(float(row.get("summary_sim", 0)), 4),
+        "final_score": round(float(row.get("final_score", 0)), 4),
+        "condition_match": row.get("condition_match"),
+        "reco_reason": row.get("reco_reason"),
+    }
+
+
+# ============================================================
+# 10. 최종 점수 / 추천 상태
 # ============================================================
 
 def get_final_score_cap(condition_match: str) -> float:
@@ -964,7 +1251,8 @@ def recommend_cases_service(
                 "status": "NO_RESULT",
                 "message": "입력하신 내용만으로는 비즈니스 문제나 케이스 탐색 의도를 확인하기 어려워요. 해결하고 싶은 상황을 조금 더 구체적으로 적어주세요."
             },
-            "recommendations": []
+            "recommendations": [],
+            "map_candidates": []
         }
 
     expanded_query = query_meta.get("expanded_query", query_text)
@@ -1028,6 +1316,15 @@ def recommend_cases_service(
 
     result_status = make_result_status(final_results)
 
+    # 검색 결과 맵용 동적 좌표 생성
+    # 기존 x/y는 전체 산점도용으로 유지하고, dynamic_x/dynamic_y만 추가한다.
+    map_candidates = add_dynamic_map_coordinates(
+        query_embedding=query_embedding,
+        sorted_candidates=candidates,
+        final_results=final_results,
+        map_k=max(30, min(top_k, 50))
+    )
+
     recommendations = []
 
     for row in final_results:
@@ -1052,6 +1349,11 @@ def recommend_cases_service(
             "perf_dir": row.get("perf_dir"),
             "x": row.get("x"),
             "y": row.get("y"),
+            "dynamic_x": row.get("dynamic_x"),
+            "dynamic_y": row.get("dynamic_y"),
+            "map_distance": row.get("map_distance"),
+            "map_group": row.get("map_group"),
+            "map_rank": row.get("map_rank"),
             "meta_sim": round(float(row.get("meta_sim", 0)), 4),
             "summary_sim": round(float(row.get("summary_sim", 0)), 4),
             "metadata_bonus": round(float(row.get("metadata_bonus", 0)), 4),
@@ -1069,7 +1371,8 @@ def recommend_cases_service(
         "e5_query": e5_query,
         "query_meta": query_meta,
         "result_status": result_status,
-        "recommendations": recommendations
+        "recommendations": recommendations,
+        "map_candidates": [build_dynamic_map_item(row) for row in map_candidates]
     }
 
 

@@ -161,40 +161,13 @@ function App() {
   return (
     <div>
       <header style={{
-        display: "flex", alignItems: "center",
-        padding: "0 32px 0 240px", height: 72, borderBottom: "1px solid #e8e8e8",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: 0, height: 72, borderBottom: "1px solid #e8e8e8",
         background: "#fff", position: "sticky", top: 0, zIndex: 100,
         boxSizing: "border-box",
       }}>
-        
-        {page !== "landing" && (
-          <button
-            onClick={() => {
-              setHistory([]); 
-              setPage("landing"); 
-              window.scrollTo(0, 0); 
-            }}
-            style={{
-              background: "transparent", 
-              border: "none", 
-              cursor: "pointer",
-              marginRight: 16, 
-              padding: "8px 12px", 
-              display: "flex", 
-              alignItems: "center",
-              fontSize: 15, 
-              fontWeight: 600, 
-              color: "#1a1a1a",
-              fontFamily: "'Pretendard', 'Apple SD Gothic Neo', sans-serif",
-              letterSpacing: "-0.02em"
-            }}
-            title="첫 화면으로 돌아가기"
-          >
-            ← 메인으로
-          </button>
-        )}
-
-        <div
+        <div style={styles.headerInner}>
+          <div
           style={{ display: "flex", alignItems: "center", gap: 16, cursor: "pointer" }}
           onClick={() => {
             setHistory([]);
@@ -284,6 +257,7 @@ function App() {
             )}
           </div>
         </div>
+        </div>
       </header>
 
       {page === "login" && (
@@ -326,6 +300,16 @@ function App() {
 }
 
 const styles = {
+  headerInner: {
+    width: "calc(100% - 280px)",
+    maxWidth: 1500,
+    height: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    boxSizing: "border-box",
+  },
+
   iconHeaderBtn: {
     position: "relative",
     background: "#fff",
