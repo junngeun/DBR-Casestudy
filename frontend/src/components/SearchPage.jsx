@@ -1735,8 +1735,50 @@ function AnalysisModal({ result, onClose }) {
 }
 
 function PersonalStrategyModal({ value, onChange, loading, error, caseCount, onClose, onSubmit }) {
+  const loadingSteps = [
+    "케이스 핵심 포인트를 정리하는 중...",
+    "내 상황과 연결되는 부분을 찾는 중...",
+    "바로 실행할 액션을 구성하는 중...",
+    "주의할 점을 점검하는 중...",
+    "맞춤 전략을 보기 좋게 정리하는 중...",
+  ];
+
+  const [loadingStepIndex, setLoadingStepIndex] = useState(0);
+
+  useEffect(() => {
+    if (!loading) {
+      setLoadingStepIndex(0);
+      return undefined;
+    }
+
+    const timer = setInterval(() => {
+      setLoadingStepIndex((prev) => (prev + 1) % loadingSteps.length);
+    }, 1500);
+
+    return () => clearInterval(timer);
+  }, [loading]);
+
   return (
     <>
+      <style>
+        {`
+          @keyframes personalStrategySpin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+
+          @keyframes personalStrategyProgress {
+            0% { transform: translateX(-110%); }
+            100% { transform: translateX(310%); }
+          }
+
+          @keyframes personalStrategyPulse {
+            0%, 100% { opacity: 0.55; }
+            50% { opacity: 1; }
+          }
+        `}
+      </style>
+
       <div style={styles.personalModalOverlay} onClick={loading ? undefined : onClose} />
 
       <div style={styles.personalModal}>
@@ -1776,6 +1818,21 @@ function PersonalStrategyModal({ value, onChange, loading, error, caseCount, onC
 
         {error && <p style={styles.personalErrorText}>{error}</p>}
 
+        {loading && (
+          <div style={styles.personalLoadingBox}>
+            <div style={styles.personalLoadingTop}>
+              <span style={styles.personalLoadingSpinner} />
+              <div>
+                <p style={styles.personalLoadingTitle}>AI가 추천 케이스를 내 상황에 맞게 해석하고 있어요.</p>
+                <p style={styles.personalLoadingStep}>{loadingSteps[loadingStepIndex]}</p>
+              </div>
+            </div>
+            <div style={styles.personalLoadingProgressTrack}>
+              <div style={styles.personalLoadingProgressBar} />
+            </div>
+          </div>
+        )}
+
         {/* <div style={styles.personalModalNotice}>
           입력한 상황과 케이스가 충분히 맞지 않으면 적용 한계도 함께 안내합니다.
         </div> */}
@@ -1799,7 +1856,14 @@ function PersonalStrategyModal({ value, onChange, loading, error, caseCount, onC
             onClick={onSubmit}
             disabled={loading}
           >
-            {loading ? "맞춤 전략 생성 중..." : "적용하기"}
+            {loading ? (
+              <span style={styles.personalSubmitLoadingText}>
+                <span style={styles.personalBtnSpinner} />
+                맞춤 전략 생성 중...
+              </span>
+            ) : (
+              "적용하기"
+            )}
           </button>
         </div>
       </div>
@@ -3469,6 +3533,15 @@ const styles = {
   personalExampleText: { margin: 0, fontSize: 13.5, lineHeight: 1.65, color: "#555", wordBreak: "keep-all" },
   personalTextarea: { width: "100%", minHeight: 150, padding: 15, border: "1px solid #e0e0e0", borderRadius: 10, resize: "vertical", fontSize: 14, lineHeight: 1.7, color: "#1a1a1a", fontFamily: "inherit", outline: "none", boxSizing: "border-box" },
   personalErrorText: { margin: "10px 0 0", fontSize: 13, fontWeight: 700, color: "#c0392b" },
+  personalLoadingBox: { marginTop: 14, padding: "14px 15px", background: "linear-gradient(135deg, #FFF8F2 0%, #ffffff 100%)", border: "1px solid #F7D8C6", borderRadius: 12, boxShadow: "0 8px 22px rgba(232,111,0,0.08)" },
+  personalLoadingTop: { display: "flex", alignItems: "center", gap: 12, marginBottom: 12 },
+  personalLoadingSpinner: { width: 22, height: 22, borderRadius: "50%", border: "3px solid rgba(232,111,0,0.18)", borderTopColor: "#E86F00", animation: "personalStrategySpin 0.8s linear infinite", flexShrink: 0 },
+  personalLoadingTitle: { margin: "0 0 4px", fontSize: 13, fontWeight: 900, color: "#1a1a1a", wordBreak: "keep-all" },
+  personalLoadingStep: { margin: 0, fontSize: 12.5, lineHeight: 1.5, color: "#E86F00", fontWeight: 750, animation: "personalStrategyPulse 1.5s ease-in-out infinite", wordBreak: "keep-all" },
+  personalLoadingProgressTrack: { position: "relative", height: 4, overflow: "hidden", background: "#F8E1D2", borderRadius: 999 },
+  personalLoadingProgressBar: { position: "absolute", top: 0, left: 0, width: "34%", height: "100%", background: "linear-gradient(90deg, rgba(232,111,0,0.2), #E86F00, rgba(232,111,0,0.2))", borderRadius: 999, animation: "personalStrategyProgress 1.25s ease-in-out infinite" },
+  personalSubmitLoadingText: { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 },
+  personalBtnSpinner: { width: 13, height: 13, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.38)", borderTopColor: "#fff", animation: "personalStrategySpin 0.75s linear infinite", flexShrink: 0 },
   personalModalNotice: { marginTop: 12, padding: "11px 13px", background: "#f8f8f8", border: "1px solid #eee", borderRadius: 8, fontSize: 12.5, color: "#777", lineHeight: 1.6, wordBreak: "keep-all" },
   personalModalFooter: { display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20 },
   personalCancelBtn: { padding: "10px 18px", fontSize: 13, color: "#666", background: "#fff", border: "1px solid #e0e0e0", borderRadius: 8, cursor: "pointer", fontFamily: "inherit" },
