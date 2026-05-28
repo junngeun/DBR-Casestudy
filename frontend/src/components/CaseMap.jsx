@@ -129,74 +129,78 @@ function getDynamicAngle(item, index) {
   return getStableFallbackAngle(item, index);
 }
 
-function getScoreTargetRadius(item) {
-  const rank = toFiniteNumber(item.rank ?? item.ranking ?? item.map_rank ?? item.mapRank);
-  const score = getMapScore(item);
-
-  // 검색 결과 맵의 거리 기준.
-  // TOP5는 순위가 직관적으로 보이도록 기본 반지름을 갖고,
-  // final_score가 낮을수록 조금 더 바깥으로 밀어낸다.
-  const clampedScore = score !== null ? clampLabel(score, 0.4, 1) : null;
-
-  if (rank !== null && rank >= 1 && rank <= 5) {
-    const rankBase = [190, 270, 355, 445, 540][rank - 1];
-
-    if (clampedScore !== null) {
-      const scoreRadius = 155 + Math.pow(1 - clampedScore, 1.05) * 780;
-      return rankBase * 0.68 + scoreRadius * 0.32;
-    }
-
-    return rankBase;
-  }
-
-  if (clampedScore !== null) {
-    // 72%와 60%처럼 점수 차이가 있는 후보가 같은 거리처럼 보이지 않도록
-    // 기존보다 점수별 거리 차이를 조금 더 벌린다.
-    return 175 + Math.pow(1 - clampedScore, 1.08) * 820;
-  }
-
-  return 620;
-}
-
-function getOriginalDynamicRadius(item) {
+function getDynamicRadius(item) {
   const x = toFiniteNumber(item.dynamicX);
   const y = toFiniteNumber(item.dynamicY);
 
-  if (x === null || y === null) return null;
+  if (x === null || y === null) return 0;
 
   const dx = x - 500;
   const dy = y - 500;
   const radius = Math.sqrt(dx * dx + dy * dy);
 
-  return Number.isFinite(radius) ? radius : null;
+  return Number.isFinite(radius) ? radius : 0;
 }
 
-function getSoftScoreAlignedRadius(item) {
+function getDynamicAngleFromPoint(item, index) {
+  const x = toFiniteNumber(item.dynamicX);
+  const y = toFiniteNumber(item.dynamicY);
+
+  if (x !== null && y !== null) {
+    const dx = x - 500;
+    const dy = y - 500;
+
+    if (Math.abs(dx) + Math.abs(dy) > 0.001) {
+      return Math.atan2(dy, dx);
+    }
+  }
+
+  return getDynamicAngle(item, index);
+}
+
+function getReadableRank(item) {
   const rank = toFiniteNumber(item.rank ?? item.ranking ?? item.map_rank ?? item.mapRank);
-  const originalRadius = getOriginalDynamicRadius(item);
-  const targetRadius = getScoreTargetRadius(item);
+  return rank;
+}
 
-  if (originalRadius === null) return targetRadius;
+function getRankRadiusRange(rank, score) {
+  // TOP5는 "가까운 추천" 영역 안에서만 순서를 살짝 보정한다.
+  // 완전한 줄 세우기는 하지 않고, 반지름 범위만 제한해서 자연스러운 방향성은 유지한다.
+  const ranges = {
+    1: [145, score !== null && score >= 0.8 ? 215 : 245],
+    2: [210, 315],
+    3: [275, 390],
+    4: [340, 475],
+    5: [405, 560],
+  };
 
-  // TOP5는 사용자가 순위와 거리감을 가장 먼저 보기 때문에
-  // 기존 좌표를 과하게 믿지 않고 목표 반지름 쪽으로 강하게 보정한다.
+  return ranges[rank] || null;
+}
+
+function stabilizeDynamicCasePosition(item, index) {
+  const rank = getReadableRank(item);
+  const score = getMapScore(item);
+  const angle = getDynamicAngleFromPoint(item, index);
+  let radius = getDynamicRadius(item);
+
+  if (!Number.isFinite(radius) || radius < 1) {
+    radius = 460 + index * 12;
+  }
+
   const isTop5 = rank !== null && rank >= 1 && rank <= 5;
 
   if (isTop5) {
-    return targetRadius * 0.82 + originalRadius * 0.18;
+    const range = getRankRadiusRange(rank, score);
+
+    if (range) {
+      const [minR, maxR] = range;
+      radius = clampLabel(radius, minR, maxR);
+    }
+  } else {
+    // TOP5가 아닌 후보가 현재 고민 중심 근처로 들어와 TOP 추천처럼 보이는 것만 방지한다.
+    // 대신 바깥쪽 좌표는 그대로 두어 의미 분포가 무너지지 않게 한다.
+    radius = Math.max(radius, 430);
   }
-
-  // 일반 후보는 너무 튀는 경우만 완화한다.
-  const tolerance = 130;
-  const minRadius = Math.max(120, targetRadius - tolerance);
-  const maxRadius = Math.min(900, targetRadius + tolerance);
-
-  return clampLabel(originalRadius, minRadius, maxRadius);
-}
-
-function alignDynamicCaseByScore(item, index) {
-  const angle = getDynamicAngle(item, index);
-  const radius = getSoftScoreAlignedRadius(item);
 
   return {
     ...item,
@@ -204,12 +208,6 @@ function alignDynamicCaseByScore(item, index) {
     dynamicY: 500 + Math.sin(angle) * radius,
     map_distance: radius,
   };
-}
-
-
-function getReadableRank(item) {
-  const rank = toFiniteNumber(item.rank ?? item.ranking ?? item.map_rank ?? item.mapRank);
-  return rank;
 }
 
 function getMinimumNodeDistance(a, b) {
@@ -220,21 +218,21 @@ function getMinimumNodeDistance(a, b) {
   const labelA = rankA !== null && rankA >= 1 && rankA <= 20;
   const labelB = rankB !== null && rankB >= 1 && rankB <= 20;
 
-  if (topA && topB) return 168;
-  if (topA || topB) return 138;
-  if (labelA && labelB) return 112;
-  if (labelA || labelB) return 88;
-  return 58;
+  if (topA && topB) return 118;
+  if (topA || topB) return 96;
+  if (labelA && labelB) return 78;
+  if (labelA || labelB) return 62;
+  return 42;
 }
 
 function spreadDynamicCasesForReadability(items) {
-  // 검색 결과 맵은 모든 후보를 첫 화면에 압축하지 않는다.
-  // 대신 TOP5~20 라벨이 읽히도록 점 사이 최소 간격만 결정적으로 보정한다.
+  // 핵심: 반지름은 추천 강도 의미를 담기 때문에 크게 흔들지 않는다.
+  // 겹침 완화는 거의 각도 조정에 가깝게, 약하게만 적용한다.
   const nodes = items.map((item, index) => ({
     ...item,
     _spreadIndex: index,
-    dynamicX: toFiniteNumber(item.dynamicX) ?? 500,
-    dynamicY: toFiniteNumber(item.dynamicY) ?? 500,
+    _baseRadius: getDynamicRadius(item),
+    _baseAngle: getDynamicAngleFromPoint(item, index),
   }));
 
   const getTieAngle = (a, b) => {
@@ -244,7 +242,7 @@ function spreadDynamicCasesForReadability(items) {
     return ((seed * 137.508) % 360) * (Math.PI / 180);
   };
 
-  for (let pass = 0; pass < 64; pass += 1) {
+  for (let pass = 0; pass < 28; pass += 1) {
     let moved = false;
 
     for (let i = 0; i < nodes.length; i += 1) {
@@ -265,68 +263,48 @@ function spreadDynamicCasesForReadability(items) {
 
         if (distance >= minDistance) continue;
 
-        const push = (minDistance - distance) * 0.66;
+        const push = (minDistance - distance) * 0.28;
         const ux = dx / distance;
         const uy = dy / distance;
 
         const rankA = getReadableRank(a) ?? 999;
         const rankB = getReadableRank(b) ?? 999;
-        const weightA = rankA <= 5 ? 0.42 : 0.58;
-        const weightB = rankB <= 5 ? 0.42 : 0.58;
-        const total = weightA + weightB;
+        const lockA = rankA <= 5 ? 0.35 : 0.5;
+        const lockB = rankB <= 5 ? 0.35 : 0.5;
+        const total = lockA + lockB;
 
-        a.dynamicX -= ux * push * (weightA / total);
-        a.dynamicY -= uy * push * (weightA / total);
-        b.dynamicX += ux * push * (weightB / total);
-        b.dynamicY += uy * push * (weightB / total);
+        a.dynamicX -= ux * push * (lockA / total);
+        a.dynamicY -= uy * push * (lockA / total);
+        b.dynamicX += ux * push * (lockB / total);
+        b.dynamicY += uy * push * (lockB / total);
         moved = true;
       }
     }
 
     nodes.forEach((node) => {
-      const dx = node.dynamicX - 500;
-      const dy = node.dynamicY - 500;
-      const radius = Math.sqrt(dx * dx + dy * dy);
-      const maxRadius = 960;
-      const minRadius = 110;
+      const rank = getReadableRank(node);
+      const isTop5 = rank !== null && rank >= 1 && rank <= 5;
+      const angle = getDynamicAngleFromPoint(node, node._spreadIndex);
+      let radius = getDynamicRadius(node);
 
-      if (radius > 0.001) {
-        const rank = getReadableRank(node);
-        const targetRadius = getScoreTargetRadius(node);
-        const pullStrength = rank !== null && rank >= 1 && rank <= 5 ? 0.38 : 0.12;
-        let nextRadius = radius * (1 - pullStrength) + targetRadius * pullStrength;
-        nextRadius = clampLabel(nextRadius, minRadius, maxRadius);
-        const ratio = nextRadius / radius;
-        node.dynamicX = 500 + dx * ratio;
-        node.dynamicY = 500 + dy * ratio;
+      if (isTop5) {
+        const range = getRankRadiusRange(rank, getMapScore(node));
+        if (range) radius = clampLabel(radius, range[0], range[1]);
       } else {
-        const angle = getStableFallbackAngle(node, node._spreadIndex ?? 0);
-        node.dynamicX = 500 + Math.cos(angle) * minRadius;
-        node.dynamicY = 500 + Math.sin(angle) * minRadius;
+        radius = Math.max(radius, 430);
       }
+
+      // 너무 멀리 튄 점만 제한한다. 일반 후보의 자연스러운 분포는 유지한다.
+      radius = Math.min(radius, 930);
+      node.dynamicX = 500 + Math.cos(angle) * radius;
+      node.dynamicY = 500 + Math.sin(angle) * radius;
+      node.map_distance = radius;
     });
 
     if (!moved) break;
   }
 
-  // 마지막에 한 번 더 TOP5 반지름을 정리해서
-  // TOP1보다 TOP3가 중심에 더 가까워 보이는 상황을 줄인다.
-  nodes.forEach((node) => {
-    const rank = getReadableRank(node);
-    const dx = node.dynamicX - 500;
-    const dy = node.dynamicY - 500;
-    const radius = Math.sqrt(dx * dx + dy * dy);
-
-    if (rank !== null && rank >= 1 && rank <= 5 && radius > 0.001) {
-      const targetRadius = getScoreTargetRadius(node);
-      const nextRadius = radius * 0.28 + targetRadius * 0.72;
-      const ratio = nextRadius / radius;
-      node.dynamicX = 500 + dx * ratio;
-      node.dynamicY = 500 + dy * ratio;
-    }
-  });
-
-  return nodes.map(({ _spreadIndex, ...item }) => item);
+  return nodes.map(({ _spreadIndex, _baseRadius, _baseAngle, ...item }) => item);
 }
 
 function normalizeCase(item, index) {
@@ -387,6 +365,8 @@ export default function CaseMap({
   const lastSelectRef = useRef({ key: "", time: 0 });
 
   const [viewMode, setViewMode] = useState("scatter");
+  const [selectedCaseKey, setSelectedCaseKey] = useState("");
+  const [centerRequestCount, setCenterRequestCount] = useState(0);
   const [hoveredCase, setHoveredCase] = useState(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
   const [zoomLevel, setZoomLevel] = useState(100);
@@ -400,24 +380,31 @@ export default function CaseMap({
     onCaseClickRef.current = onCaseClick;
   }, [onCaseClick]);
 
+  const getCaseIdentity = useCallback((caseData) => {
+    if (!caseData) return "";
+    return String(caseData.case_idx ?? caseData.id ?? caseData.title ?? "");
+  }, []);
+
   const notifyCaseSelect = useCallback((caseData) => {
     if (!caseData) return;
 
-    const caseKey = String(caseData.case_idx ?? caseData.id ?? caseData.title ?? "");
+    const caseKey = getCaseIdentity(caseData);
     const now = Date.now();
 
-    if (lastSelectRef.current.key === caseKey && now - lastSelectRef.current.time < 250) {
+    if (lastSelectRef.current.key === caseKey && now - lastSelectRef.current.time < 180) {
       return;
     }
 
     lastSelectRef.current = { key: caseKey, time: now };
+    setSelectedCaseKey(caseKey);
+    setCenterRequestCount((prev) => prev + 1);
 
     if (typeof onCaseClickRef.current === "function") {
       onCaseClickRef.current(caseData);
     }
 
     window.dispatchEvent(new CustomEvent("caseMapCaseSelect", { detail: caseData }));
-  }, []);
+  }, [getCaseIdentity]);
 
   const scatterCases = useMemo(() => {
     return cases.map((item, index) => normalizeCase(item, index));
@@ -433,7 +420,7 @@ export default function CaseMap({
         const score = Number(item.final_score ?? item.finalScore ?? 0);
         return item.isRecommended || item.is_recommended || item.map_group === "recommended" || score >= 0.4;
       })
-      .map((item, index) => alignDynamicCaseByScore(item, index));
+      .map((item, index) => stabilizeDynamicCasePosition(item, index));
 
     return spreadDynamicCasesForReadability(normalized);
   }, [mapCandidates]);
@@ -505,7 +492,65 @@ export default function CaseMap({
     }
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewMode, scatterCases, dynamicCases, highlightedIds, dimensions]);
+  }, [viewMode, scatterCases, dynamicCases, highlightedIds, dimensions, selectedCaseKey]);
+
+  const getRenderedPointForCase = useCallback((targetCase, targetMode = viewMode) => {
+    if (!targetCase) return null;
+
+    const { width, height } = dimensions;
+    const margin = targetMode === "dynamic"
+      ? { top: 42, right: 46, bottom: 56, left: 46 }
+      : { top: 28, right: 28, bottom: 58, left: 120 };
+
+    const innerW = width - margin.left - margin.right;
+    const innerH = height - margin.top - margin.bottom;
+
+    if (innerW <= 0 || innerH <= 0) return null;
+
+    const xScale = d3.scaleLinear().domain([0, 1000]).range([0, innerW]);
+    const yScale = d3.scaleLinear().domain([0, 1000]).range([innerH, 0]);
+
+    if (targetMode === "dynamic") {
+      const centerX = xScale(500);
+      const centerY = yScale(500);
+      const dynamicUnitScale = Math.min(innerW, innerH) / 1000;
+
+      return {
+        innerW,
+        innerH,
+        targetX: centerX + (targetCase.dynamicX - 500) * dynamicUnitScale,
+        targetY: centerY - (targetCase.dynamicY - 500) * dynamicUnitScale,
+        targetScale: 1.28,
+      };
+    }
+
+    return {
+      innerW,
+      innerH,
+      targetX: xScale(targetCase.mapX),
+      targetY: yScale(targetCase.mapY),
+      targetScale: 1.5,
+    };
+  }, [dimensions, viewMode]);
+
+  const centerCaseOnMap = useCallback((targetCase, targetMode = viewMode) => {
+    if (!targetCase || !svgRef.current || !zoomRef.current) return;
+
+    const point = getRenderedPointForCase(targetCase, targetMode);
+    if (!point) return;
+
+    const nextTransform = d3.zoomIdentity
+      .translate(point.innerW / 2 - point.targetX * point.targetScale, point.innerH / 2 - point.targetY * point.targetScale)
+      .scale(point.targetScale);
+
+    currentTransformRef.current[targetMode] = nextTransform;
+
+    d3.select(svgRef.current)
+      .transition()
+      .duration(430)
+      .ease(d3.easeCubicOut)
+      .call(zoomRef.current.transform, nextTransform);
+  }, [getRenderedPointForCase, viewMode]);
 
   useEffect(() => {
     if (!focusCaseId || !svgRef.current || !zoomRef.current) return;
@@ -521,42 +566,177 @@ export default function CaseMap({
 
     if (!targetCase) return;
 
-    const { width, height } = dimensions;
-    const margin = viewMode === "dynamic"
-      ? { top: 42, right: 46, bottom: 56, left: 46 }
-      : { top: 28, right: 28, bottom: 58, left: 120 };
+    setSelectedCaseKey(getCaseIdentity(targetCase));
+    centerCaseOnMap(targetCase, viewMode);
+  }, [focusCaseId, scatterCases, dynamicCases, viewMode, centerCaseOnMap, getCaseIdentity]);
 
-    const innerW = width - margin.left - margin.right;
-    const innerH = height - margin.top - margin.bottom;
+  useEffect(() => {
+    if (!selectedCaseKey || !svgRef.current || !zoomRef.current) return;
 
-    if (innerW <= 0 || innerH <= 0) return;
+    const sourceCases = viewMode === "dynamic" ? dynamicCases : scatterCases;
+    const targetCase = sourceCases.find((item) => getCaseIdentity(item) === selectedCaseKey);
 
-    const xScale = d3.scaleLinear().domain([0, 1000]).range([0, innerW]);
-    const yScale = d3.scaleLinear().domain([0, 1000]).range([innerH, 0]);
+    if (!targetCase) return;
 
-    const centerX = xScale(500);
-    const centerY = yScale(500);
-    const dynamicUnitScale = Math.min(innerW, innerH) / 1000;
+    centerCaseOnMap(targetCase, viewMode);
+  }, [selectedCaseKey, centerRequestCount, scatterCases, dynamicCases, viewMode, centerCaseOnMap, getCaseIdentity]);
 
-    const targetX = viewMode === "dynamic"
-      ? centerX + (targetCase.dynamicX - 500) * dynamicUnitScale
-      : xScale(targetCase.mapX);
-    const targetY = viewMode === "dynamic"
-      ? centerY - (targetCase.dynamicY - 500) * dynamicUnitScale
-      : yScale(targetCase.mapY);
-    const targetScale = viewMode === "dynamic" ? 1.55 : 1.5;
+  useEffect(() => {
+    const isTypingTarget = (target) => {
+      if (!target) return false;
+      const tagName = String(target.tagName || "").toLowerCase();
+      return tagName === "input" || tagName === "textarea" || target.isContentEditable;
+    };
 
-    const nextTransform = d3.zoomIdentity
-      .translate(innerW / 2 - targetX * targetScale, innerH / 2 - targetY * targetScale)
-      .scale(targetScale);
+    const getKeyboardPoint = (item) => {
+      if (viewMode === "dynamic") {
+        return { x: Number(item.dynamicX), y: Number(item.dynamicY) };
+      }
+      return { x: Number(item.mapX), y: Number(item.mapY) };
+    };
 
-    currentTransformRef.current[viewMode] = nextTransform;
+    const findNextCaseByDirection = (currentCase, direction, sourceCases) => {
+      const currentPoint = getKeyboardPoint(currentCase);
+      if (!Number.isFinite(currentPoint.x) || !Number.isFinite(currentPoint.y)) return null;
 
-    d3.select(svgRef.current)
-      .transition()
-      .duration(650)
-      .call(zoomRef.current.transform, nextTransform);
-  }, [focusCaseId, scatterCases, dynamicCases, dimensions, viewMode]);
+      const directionConfig = {
+        ArrowRight: { vx: 1, vy: 0 },
+        ArrowLeft: { vx: -1, vy: 0 },
+        ArrowUp: { vx: 0, vy: 1 },
+        ArrowDown: { vx: 0, vy: -1 },
+      }[direction];
+
+      if (!directionConfig) return null;
+
+      const getNavigationTier = (item) => {
+        const rank = Number(item.rank ?? item.ranking ?? item.map_rank ?? item.mapRank);
+        const isTop5 = Number.isFinite(rank) && rank >= 1 && rank <= 5;
+        const isTop20 = Number.isFinite(rank) && rank >= 1 && rank <= 20;
+        const isRecommendedCase =
+          item.map_group === "recommended" ||
+          item.isRecommended === true ||
+          item.is_recommended === true;
+
+        if (isTop5 || isRecommendedCase) return 0;
+        if (isTop20) return 1;
+        return 2;
+      };
+
+      const currentTier = getNavigationTier(currentCase);
+
+      const candidates = sourceCases
+        .filter((item) => getCaseIdentity(item) !== getCaseIdentity(currentCase))
+        .map((item) => ({ item, point: getKeyboardPoint(item) }))
+        .filter(({ point }) => Number.isFinite(point.x) && Number.isFinite(point.y));
+
+      const buildDirectionalCandidates = (minCos) => candidates
+        .map(({ item, point }) => {
+          const dx = point.x - currentPoint.x;
+          const dy = point.y - currentPoint.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          if (!Number.isFinite(distance) || distance < 0.001) return null;
+
+          const projection = dx * directionConfig.vx + dy * directionConfig.vy;
+
+          // 실제로 누른 방향 앞쪽에 있는 후보만 본다.
+          if (projection <= 8) return null;
+
+          const cos = projection / distance;
+          if (cos < minCos) return null;
+
+          const perpendicular = Math.sqrt(Math.max(0, distance * distance - projection * projection));
+          const tier = getNavigationTier(item);
+          const rank = Number(item.rank ?? item.ranking ?? item.map_rank ?? item.mapRank ?? 999);
+
+          // TOP5 내부 탐색 중일 때만 TOP5/추천 후보를 우선한다.
+          // 일반 후보를 보고 있을 때는 TOP5로 빨려 들어가지 않게 공간상 방향성을 더 우선한다.
+          const tierPenalty = currentTier === 0
+            ? tier * 2600
+            : tier === 0
+              ? 780
+              : 0;
+
+          const rankPenalty = currentTier === 0 && Number.isFinite(rank)
+            ? Math.min(rank, 999) * 0.35
+            : 0;
+
+          // 방향키는 "방향 일치도"를 가장 크게 보고, 거리는 보조로만 본다.
+          // 이렇게 해야 아래 방향키가 왼쪽/오른쪽으로 튀는 현상이 줄어든다.
+          const directionScore = (1 - cos) * 3600;
+          const sideScore = perpendicular * 1.35;
+          const forwardScore = projection * 0.18;
+          const distanceScore = distance * 0.04;
+
+          const score =
+            directionScore +
+            sideScore +
+            forwardScore +
+            distanceScore +
+            tierPenalty +
+            rankPenalty;
+
+          return { item, score, cos, distance, projection, perpendicular, tier };
+        })
+        .filter(Boolean)
+        .sort((a, b) =>
+          a.score - b.score ||
+          b.cos - a.cos ||
+          a.perpendicular - b.perpendicular ||
+          a.distance - b.distance
+        );
+
+      // 1차: 방향에서 많이 벗어난 후보는 제외한다.
+      const strictCandidates = buildDirectionalCandidates(0.48);
+      if (strictCandidates.length > 0) return strictCandidates[0].item;
+
+      // 2차: 후보가 없을 때만 대각선까지 조금 허용한다.
+      const relaxedCandidates = buildDirectionalCandidates(0.30);
+      if (relaxedCandidates.length > 0) return relaxedCandidates[0].item;
+
+      return null;
+    };
+
+    const handleKeyDown = (event) => {
+      if (isTypingTarget(event.target)) return;
+      if (!selectedCaseKey) return;
+
+      const sourceCases = viewMode === "dynamic" ? dynamicCases : scatterCases;
+      const currentCase = sourceCases.find((item) => getCaseIdentity(item) === selectedCaseKey);
+      if (!currentCase) return;
+
+      if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+        event.preventDefault();
+        const nextCase = findNextCaseByDirection(currentCase, event.key, sourceCases);
+        if (nextCase) notifyCaseSelect(nextCase);
+        return;
+      }
+
+      if (event.key === "Enter") {
+        event.preventDefault();
+        notifyCaseSelect(currentCase);
+        return;
+      }
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setSelectedCaseKey("");
+        setHoveredCase(null);
+
+        // 선택 표시뿐 아니라 우측 상세 패널도 함께 닫는다.
+        if (typeof onCaseClickRef.current === "function") {
+          onCaseClickRef.current(null);
+        }
+
+        window.dispatchEvent(new CustomEvent("caseMapCaseClear"));
+        window.dispatchEvent(new CustomEvent("caseMapCaseSelect", { detail: null }));
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedCaseKey, viewMode, dynamicCases, scatterCases, notifyCaseSelect, getCaseIdentity]);
+
 
   const setTooltipFromEvent = (event) => {
     if (!containerRef.current) return;
@@ -986,7 +1166,8 @@ export default function CaseMap({
 
     const legend = root
       .append("g")
-      .attr("transform", `translate(${margin.left + 8},${margin.top + 8})`);
+      // 범례는 맵 내부 여백에 영향받지 않게 화면 좌측 상단에 고정한다.
+      .attr("transform", "translate(12, 12)");
 
     legend
       .append("rect")
@@ -1141,6 +1322,10 @@ export default function CaseMap({
       return getTopRank(item);
     };
 
+    const isSelectedNode = (item) => {
+      return Boolean(selectedCaseKey) && getCaseIdentity(item) === selectedCaseKey;
+    };
+
     const recommendedData = data.filter(isNodeRecommended);
 
     const resetNodeStyles = () => {
@@ -1170,11 +1355,17 @@ export default function CaseMap({
         .attr("class", "case-node")
         .attr("cx", (d) => xAccessor(d))
         .attr("cy", (d) => yAccessor(d))
-        .attr("r", (d) => (isNodeRecommended(d) ? 12.6 : 5.2))
+        .attr("r", (d) => {
+          if (isSelectedNode(d)) return isNodeRecommended(d) ? 13.4 : 6.8;
+          return isNodeRecommended(d) ? 12.6 : 5.2;
+        })
         .attr("fill", (d) => getProblemColor(d.prob_main))
-        .attr("fill-opacity", (d) => (isNodeRecommended(d) ? 1 : 0.68))
+        .attr("fill-opacity", (d) => (isSelectedNode(d) || isNodeRecommended(d) ? 1 : 0.68))
         .attr("stroke", "#ffffff")
-        .attr("stroke-width", (d) => (isNodeRecommended(d) ? 5.8 : 1.4))
+        .attr("stroke-width", (d) => {
+          if (isSelectedNode(d)) return isNodeRecommended(d) ? 6.2 : 2.4;
+          return isNodeRecommended(d) ? 5.8 : 1.4;
+        })
         .style("filter", (d) => (isNodeRecommended(d) ? "drop-shadow(0px 3px 8px rgba(17,24,39,0.24))" : "none"))
         .style("cursor", "pointer")
         .on("pointerdown", function (event) {
@@ -1376,14 +1567,38 @@ export default function CaseMap({
         .attr("text-anchor", "middle")
         .attr("font-size", (d) => (d.recommended ? 12 : 10.5))
         .attr("font-weight", (d) => (d.recommended ? 850 : 650))
-        .attr("fill", (d) => (d.recommended ? "#111827" : "#4b5563"))
-        .attr("fill-opacity", (d) => (d.recommended ? 0.96 : 0.86))
+        .attr("fill", (d) => (isSelectedNode(d) ? "#E86F00" : d.recommended ? "#111827" : "#4b5563"))
+        .attr("fill-opacity", (d) => (d.recommended || isSelectedNode(d) ? 0.96 : 0.86))
         .attr("paint-order", "stroke")
         .attr("stroke", "rgba(255,255,255,0.92)")
         .attr("stroke-width", (d) => (d.recommended ? 3.4 : 2.6))
         .attr("stroke-linejoin", "round")
         .text((d) => truncateText(d.company, d.recommended ? 9 : 8));
 
+      const selectedDynamicData = data.filter(isSelectedNode);
+
+      const selectedGlow = nodeLayer
+        .selectAll(".selected-case-glow")
+        .data(selectedDynamicData)
+        .enter()
+        .append("g")
+        .attr("class", "selected-case-glow")
+        .attr("transform", (d) => `translate(${xAccessor(d)},${yAccessor(d)})`)
+        .style("pointer-events", "none");
+
+      selectedGlow
+        .append("circle")
+        .attr("r", (d) => (isNodeRecommended(d) ? 25 : 17))
+        .attr("fill", (d) => getProblemColor(d.prob_main))
+        .attr("fill-opacity", 0.22);
+
+      selectedGlow
+        .append("circle")
+        .attr("r", (d) => (isNodeRecommended(d) ? 16 : 10))
+        .attr("fill", "#ffffff")
+        .attr("fill-opacity", 0.38);
+
+      nodeLayer.selectAll(".selected-case-glow").lower();
       nodeLayer.selectAll(".case-node").raise();
       nodeLayer.selectAll(".dynamic-top-rank-number").raise();
       nodeLayer.selectAll(".dynamic-company-label").raise();
@@ -1437,11 +1652,14 @@ export default function CaseMap({
       .attr("class", "case-node")
       .attr("cx", (d) => xAccessor(d))
       .attr("cy", (d) => yAccessor(d))
-      .attr("r", (d) => (isNodeRecommended(d) ? 7.5 : 5.5))
+      .attr("r", (d) => {
+        if (isSelectedNode(d)) return isNodeRecommended(d) ? 8.4 : 6.6;
+        return isNodeRecommended(d) ? 7.5 : 5.5;
+      })
       .attr("fill", (d) => getProblemColor(d.prob_main))
-      .attr("fill-opacity", (d) => (isNodeRecommended(d) ? 0.96 : 0.62))
-      .attr("stroke", (d) => (isNodeRecommended(d) ? "#ffffff" : "none"))
-      .attr("stroke-width", (d) => (isNodeRecommended(d) ? 1.5 : 0))
+      .attr("fill-opacity", (d) => (isSelectedNode(d) || isNodeRecommended(d) ? 0.98 : 0.62))
+      .attr("stroke", (d) => (isSelectedNode(d) || isNodeRecommended(d) ? "#ffffff" : "none"))
+      .attr("stroke-width", (d) => (isSelectedNode(d) ? 2.2 : isNodeRecommended(d) ? 1.5 : 0))
       .style("cursor", "pointer")
       .on("mouseenter", function (event, d) {
         resetNodeStyles();
@@ -1465,6 +1683,30 @@ export default function CaseMap({
         event.stopPropagation();
         notifyCaseSelect(d);
       });
+
+    const selectedScatterGlow = nodeLayer
+      .selectAll(".selected-case-glow")
+      .data(data.filter(isSelectedNode))
+      .enter()
+      .append("g")
+      .attr("class", "selected-case-glow")
+      .attr("transform", (d) => `translate(${xAccessor(d)},${yAccessor(d)})`)
+      .style("pointer-events", "none");
+
+    selectedScatterGlow
+      .append("circle")
+      .attr("r", 24)
+      .attr("fill", (d) => getProblemColor(d.prob_main))
+      .attr("fill-opacity", 0.12);
+
+    selectedScatterGlow
+      .append("circle")
+      .attr("r", 15)
+      .attr("fill", (d) => getProblemColor(d.prob_main))
+      .attr("fill-opacity", 0.2);
+
+    nodeLayer.selectAll(".selected-case-glow").lower();
+    nodeLayer.selectAll(".case-node").raise();
   };
 
   const doZoom = useCallback((factor) => {
@@ -1519,7 +1761,7 @@ export default function CaseMap({
                 style={viewMode === "scatter" ? styles.viewToggleBtnActive : styles.viewToggleBtn}
                 onClick={() => handleViewModeChange("scatter")}
               >
-                전체 산점도
+                산점도
               </button>
               <button
                 type="button"
@@ -1528,7 +1770,7 @@ export default function CaseMap({
                 disabled={!hasDynamicMap}
                 title={!hasDynamicMap ? "검색 후 확인할 수 있습니다." : "현재 검색어 기준 동적 좌표 맵"}
               >
-                검색 결과 맵
+                탐색형 맵
               </button>
             </div>
           </div>
@@ -1599,7 +1841,7 @@ export default function CaseMap({
 
         <div style={styles.zoomHint}>
           {viewMode === "dynamic"
-            ? "드래그로 이동 · 휠로 확대/축소 · 상위 20개 기업명 표시 · 드래그/축소로 나머지 탐색"
+            ? "드래그로 이동 · 휠로 확대/축소"
             : "드래그로 이동 · 휠로 확대/축소"}
         </div>
       </div>

@@ -1004,6 +1004,11 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
   };
 
   const handleCaseSelect = (caseData, viewSource = "unknown") => {
+    if (!caseData) {
+      setSelectedCase(null);
+      return;
+    }
+
     const enrichedCase = enrichCaseForSelection(caseData);
     if (!enrichedCase) return;
 
@@ -1013,14 +1018,24 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
 
   useEffect(() => {
     const handleMapCaseSelect = (event) => {
-      if (!event?.detail) return;
+      if (!event?.detail) {
+        setSelectedCase(null);
+        return;
+      }
+
       handleCaseSelect(event.detail, "map");
     };
 
+    const handleMapCaseClear = () => {
+      setSelectedCase(null);
+    };
+
     window.addEventListener("caseMapCaseSelect", handleMapCaseSelect);
+    window.addEventListener("caseMapCaseClear", handleMapCaseClear);
 
     return () => {
       window.removeEventListener("caseMapCaseSelect", handleMapCaseSelect);
+      window.removeEventListener("caseMapCaseClear", handleMapCaseClear);
     };
   }, [result, allCases]);
 
