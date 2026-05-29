@@ -122,18 +122,22 @@ function App() {
     window.scrollTo(0, 0);
     setHistory((prev) => [...prev, page]); 
     setPage(pageName);
+    if (pageName === "request") {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
   };
 
   const goBack = () => {
-    if (history.length === 0) return; 
-
-    const newHistory = [...history];
-    const prevPage = newHistory.pop(); 
-
-    setHistory(newHistory); 
-    setPage(prevPage); 
-    window.scrollTo(0, 0);
-  };
+  if (history.length === 0) return; 
+  const newHistory = [...history];
+  const prevPage = newHistory.pop(); 
+  setHistory(newHistory); 
+  setPage(prevPage); 
+  window.scrollTo(0, 0);
+  document.body.style.overflow = "";
+};
 
   const handleAuthSuccess = (loginMember) => {
     setMember(loginMember);
