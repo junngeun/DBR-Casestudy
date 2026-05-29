@@ -15,6 +15,14 @@ const KEYWORDS = {
 
 const SYSTEM_PROMPT = `당신은 DBR(동아비즈니스리뷰) 케이스 아틀라스 서비스의 AI 분석 엔진입니다.`;
 
+const EXAMPLE_QUERIES = [
+  "리테일 업종에서 3년 차 마케터인데, 브랜드 인지도는 높아졌는데 실제 구매 전환율이 너무 낮아요.",
+  "식음료 스타트업 창업한지 2년차, 매출은 나오는데 수익성이 계속 악화되고 있어요.",
+  "IT 플랫폼 기업 신사업팀 4년 차인데, 새로운 시장에 진입하려는데 어디서부터 시작해야 할까요?",
+  "커머스 회사 PM입니다. 신규 유저는 늘고 있는데 고객 이탈률이 높아서 고민이에요.",
+  "헬스케어 스타트업 대표인데, 기술은 있는데 어떤 고객층부터 공략해야 할지 방향을 못 잡겠어요.",
+];
+
 const getStatusLabel = (status) => {
   const statusMap = {
     DIRECT_MATCH: "딱 맞는 사례를 찾았어요",
@@ -87,9 +95,18 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
   const [showSelectedList, setShowSelectedList] = useState(false);
   const resultSectionRef = useRef(null);
 
+  const [exampleIndex, setExampleIndex] = useState(0);
+
   useEffect(() => {
     const savedHistory = JSON.parse(localStorage.getItem("businessQueryHistory") || "[]");
     setQueryHistory(savedHistory);
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setExampleIndex(prev => (prev + 1) % EXAMPLE_QUERIES.length);
+    }, 2800);
+    return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -1041,6 +1058,14 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
 
   return (
     <>
+      <style>{`
+        @keyframes fadeInOut {
+          0% { opacity: 0; }
+          15% { opacity: 1; }
+          85% { opacity: 1; }
+          100% { opacity: 0; }
+        }
+      `}</style>
       <div style={styles.topSearchLayout}>
         <div style={styles.searchMainCol}>
           <div style={styles.page}>
@@ -1051,7 +1076,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
           </h1>
         </div>
 
-        <div style={styles.filterWrapper}>
+        <div style={{ ...styles.filterWrapper, margin: "0 auto 1.5rem" }}>
           <div style={styles.filterSection}>
             <p style={styles.filterLabel}>1. 산업군</p>
             <div style={styles.chipGroup}>
@@ -1115,110 +1140,94 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
         </div>
 
         <div style={{ marginTop: 20 }}>
-          <div style={{ ...styles.inputPanel, border: "1px solid #e0e0e0" }}>
+          <div style={{ ...styles.inputPanel, border: textareaFocused ? "1.5px solid #f0f0f0" : "none", position: "relative", maxWidth: 848, margin: "0 auto" }}>
             <textarea
               style={{
                 ...styles.textarea,
                 background: textareaFocused ? "#fff" : "#f5f5f5",
-                border: textareaFocused ? "1.5px solid #E86F00" : "1px solid transparent",
+                borderTop: textareaFocused ? "1.5px solid transparent" : "1px solid transparent",
+                borderLeft: textareaFocused ? "1.5px solid transparent" : "1px solid transparent",
+                borderRight: textareaFocused ? "1.5px solid transparent" : "1px solid transparent",
                 borderBottom: "none",
                 borderRadius: 0,
                 marginBottom: -20,
               }}
               placeholder="비즈니스 고민을 자유롭게 입력해주세요."
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onFocus={() => setTextareaFocused(true)}
-              onBlur={() => { if (!query.trim()) setTextareaFocused(false); }}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setShowQueryHistory(e.target.value.trim() === "");
+              }}
+              onFocus={() => {
+                setTextareaFocused(true);
+                setShowQueryHistory(true);
+              }}
+              onBlur={() => {
+                setTimeout(() => {
+                  setTextareaFocused(false);
+                  setShowQueryHistory(false);
+                }, 150);
+              }}
               onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSearch(); }}
             />
 
-          <div style={styles.historyToggleWrapper}>
-            <button
-              type="button"
-              style={styles.historyToggleBtn}
-              onClick={() => setShowQueryHistory(prev => !prev)}
-            >
-              <span>최근 입력한 비즈니스 고민</span>
-              <span style={styles.historyToggleIcon}>
-                {showQueryHistory ? "▲" : "▼"}
-              </span>
-            </button>
+        </div>  {/* inputPanel 닫기 */}
 
-            {showQueryHistory && (
-              <div style={styles.historyPanel}>
-                <div style={styles.historyFilterGroup}>
-                  <button
-                    type="button"
-                    style={historyFilter === "today" ? styles.historyFilterActive : styles.historyFilterBtn}
-                    onClick={() => setHistoryFilter("today")}
-                  >
-                    오늘
-                  </button>
-                  <button
-                    type="button"
-                    style={historyFilter === "week" ? styles.historyFilterActive : styles.historyFilterBtn}
-                    onClick={() => setHistoryFilter("week")}
-                  >
-                    일주일
-                  </button>
-                  <button
-                    type="button"
-                    style={historyFilter === "month" ? styles.historyFilterActive : styles.historyFilterBtn}
-                    onClick={() => setHistoryFilter("month")}
-                  >
-                    한 달
-                  </button>
-                  <button
-                    type="button"
-                    style={historyFilter === "all" ? styles.historyFilterActive : styles.historyFilterBtn}
-                    onClick={() => setHistoryFilter("all")}
-                  >
-                    전체
-                  </button>
-                </div>
-
-                {getFilteredQueryHistory().length === 0 ? (
-                  <p style={styles.historyEmpty}>아직 기록된 고민이 없습니다.</p>
-                ) : (
-                  <div style={styles.historyList}>
-                    {getFilteredQueryHistory().map((item) => (
-                      <button
-                        type="button"
-                        key={item.id}
-                        style={styles.historyItem}
-                        onClick={() => {
-                          setQuery(item.text);
-                          setTextareaFocused(true);
-                          setShowQueryHistory(false);
-                          window.scrollTo({ top: 0, behavior: "smooth" });
-                        }}
-                      >
-                        <span style={styles.historyText}>{item.text}</span>
-                        <span style={styles.historyDate}>
-                          {new Date(item.created_at).toLocaleString()}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-            <div style={{ ...styles.exampleAreaInInput, borderTop: "1px solid #e0e0e0" }}>
-              <p style={styles.chipsLabel}>예시 고민</p>
-              <div style={{ display: "flex", gap: 6, justifyContent: "center", marginBottom: 6, flexWrap: "wrap" }}>
-                <span style={styles.exampleChip}>리테일 업종에서 3년 차 마케터인데, 브랜드 인지도는 높아졌는데 실제 구매 전환율이 너무 낮아요.</span>
-                <span style={styles.exampleChip}>식음료 스타트업 창업한지 2년차, 매출은 나오는데 수익성이 계속 악화되고 있어요.</span>
-              </div>
-              <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap" }}>
-                <span style={styles.exampleChip}>IT 플랫폼 기업 신사업팀 4년 차인데, 새로운 시장에 진입하려는데 어디서부터 시작해야 할까요?</span>
-                <span style={styles.exampleChip}>커머스 회사 PM입니다. 신규 유저는 늘고 있는데 고객 이탈률이 높아서 고민이에요.</span>
-                <span style={styles.exampleChip}>헬스케어 스타트업 대표인데, 기술은 있는데 어떤 고객층부터 공략해야 할지 방향을 못 잡겠어요.</span>
-              </div>
+          {textareaFocused && queryHistory.length > 0 && (
+            <div style={{
+              background: "#fff",
+              border: "1px solid #e0e0e0",
+              borderRadius: 8,
+              boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+              maxHeight: 160,
+              maxWidth: 848,
+              margin: "4px auto 0",
+              overflowY: "auto",
+            }}>
+              {queryHistory.slice(0, 6).map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  style={{
+                    width: "100%", textAlign: "left", padding: "10px 14px",
+                    background: "none", border: "none", borderBottom: "1px solid #f5f5f5",
+                    cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: "#333",
+                    display: "flex", justifyContent: "space-between", alignItems: "center"
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = "#fef0e9"}
+                  onMouseLeave={e => e.currentTarget.style.background = "none"}
+                  onClick={() => {
+                    setQuery(item.text);
+                    setShowQueryHistory(false);
+                  }}
+                >
+                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {item.text}
+                  </span>
+                  <span style={{ fontSize: 11, color: "#bbb", marginLeft: 8, flexShrink: 0 }}>
+                    {new Date(item.created_at).toLocaleDateString()}
+                  </span>
+                </button>
+              ))}
             </div>
+          )}
+
+          <div style={styles.btnRow}>
+
+
+          <div style={{ borderTop: "1px solid #e0e0e0", display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", background: "#fff", overflow: "hidden" }}>
+            <span style={{ fontSize: 12, color: "#aaa", flexShrink: 0 }}>예시</span>
+            <p key={exampleIndex} style={{
+              margin: 0, fontSize: 13, color: "#888",
+              animation: "fadeInOut 2.8s ease-in-out",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>
+              {EXAMPLE_QUERIES[exampleIndex]}
+            </p>
           </div>
+
+          </div>
+          
 
           <div style={styles.btnRow}>
             <button
@@ -1349,7 +1358,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
         {!showAllList ? (
           <div style={{ textAlign: "center", padding: "20px 0" }}>
             <button 
-              style={{ ...styles.btnBrowseAll, background: browseHover ? "#E86F00" : "#F2F2F2", color: browseHover ? "#fff" : "#1a1a1a", border: browseHover ? "1px solid #E86F00" : "1px solid #ddd" }}
+              style={{ ...styles.btnBrowseAll, background: browseHover ? "#E86F00" : "#F2F2F2", color: browseHover ? "#fff" : "#1a1a1a" }}
               onClick={() => setShowAllList(true)}
               onMouseEnter={() => setBrowseHover(true)}
               onMouseLeave={() => setBrowseHover(false)}
@@ -3640,22 +3649,22 @@ const styles = {
   splitRow: { display: "flex", gap: 16, alignItems: "flex-start", width: "min(1600px, calc(100vw - 96px))", margin: "0 auto", padding: "0 0 2rem", boxSizing: "border-box" },
   caseListCol: { width: 420, flexShrink: 0, borderRight: "1px solid #e0e0e0", paddingRight: 16 },
   mapCol: { flex: 1, minWidth: 0 },
-  logoArea: { marginBottom: "2.5rem" },
+  logoArea: { marginBottom: "2.5rem", textAlign: "center" },
   logoTitle: { fontSize: 32, fontWeight: 500, lineHeight: 1.4, color: "#1a1a1a" },
   
-  filterWrapper: { marginBottom: "1.5rem", background: "#fff", border: "1px solid #ede8e2", borderRadius: 2, padding: "20px 24px", boxShadow: "0 2px 10px rgba(0,0,0,0.02)" },
+  filterWrapper: { marginBottom: "1.5rem", background: "#fff", border: "1px solid #ede8e2", borderRadius: 12, padding: "20px 24px", boxShadow: "0 2px 10px rgba(0,0,0,0.02)", maxWidth: 800  },
   filterSection: { marginBottom: 16, paddingBottom: 16, borderBottom: "1px dashed #f0f0f0" },
-  filterLabel: { fontSize: 16, fontWeight: 600, color: "#666", marginBottom: 10 },
+  filterLabel: { fontSize: 15, fontWeight: 600, color: "#666", marginBottom: 10 },
   chipGroup: { display: "flex", flexWrap: "wrap", gap: 8 },
-  chip: { padding: "7px 18px", fontSize: 15, fontWeight: 500, color: "#666", background: "#fff", border: "1px solid #e0e0e0", borderRadius: 20, cursor: "pointer", fontFamily: "inherit", transition: "all 0.2s" },
-  chipActive: { padding: "7px 18px", fontSize: 15, fontWeight: 600, color: "#fff", background: "#E86F00", border: "1px solid #E86F00", borderRadius: 20, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 6px rgba(232, 111, 0, 0.2)" },
-  chipNone: { padding: "7px 18px", fontSize: 15, fontWeight: 500, color: "#888", background: "#f9f9f9", border: "1px dashed #d0d0d0", borderRadius: 20, cursor: "pointer", fontFamily: "inherit", transition: "all 0.2s" },
-  chipActiveNone: { padding: "7px 18px", fontSize: 15, fontWeight: 600, color: "#fff", background: "#666", border: "1px solid #666", borderRadius: 20, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 6px rgba(0, 0, 0, 0.15)" },
+  chip: { padding: "7px 18px", fontSize: 13, fontWeight: 500, color: "#666", background: "#fff", border: "1px solid #e0e0e0", borderRadius: 20, cursor: "pointer", fontFamily: "inherit", transition: "all 0.2s" },
+  chipActive: { padding: "7px 18px", fontSize: 13, fontWeight: 600, color: "#fff", background: "#E86F00", border: "1px solid #E86F00", borderRadius: 20, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 6px rgba(232, 111, 0, 0.2)" },
+  chipNone: { padding: "7px 18px", fontSize: 13, fontWeight: 500, color: "#888", background: "#f9f9f9", border: "1px dashed #d0d0d0", borderRadius: 20, cursor: "pointer", fontFamily: "inherit", transition: "all 0.2s" },
+  chipActiveNone: { padding: "7px 18px", fontSize: 13, fontWeight: 600, color: "#fff", background: "#666", border: "1px solid #666", borderRadius: 20, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 6px rgba(0, 0, 0, 0.15)" },
 
-  textarea: { width: "100%", minHeight: 100, padding: "14px 16px", fontSize: 16, fontFamily: "inherit", color: "#1a1a1a", background: "#f5f5f5", borderRadius: 2, lineHeight: 1.6, outline: "none", boxSizing: "border-box", resize: "none", maxHeight: 180 },
-  btnRow: { display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12, marginBottom: "0.8rem" },
-  btnClear: { padding: "8px 16px", fontSize: 15, color: "#666", background: "transparent", border: "1px solid #e0e0e0", borderRadius: 2, cursor: "pointer", fontFamily: "inherit" },
-  btnSearch: { padding: "8px 20px", fontSize: 15, fontWeight: 500, color: "#fff", background: "#E86F00", border: "none", borderRadius: 2, fontFamily: "inherit" },
+  textarea: { width: "100%", minHeight: 100, padding: "14px 16px", fontSize: 16, fontFamily: "inherit", color: "#1a1a1a", background: "#f5f5f5", borderRadius: 12, lineHeight: 1.6, outline: "none", boxSizing: "border-box", resize: "none", maxHeight: 180 },
+  btnRow: { display: "flex", justifyContent: "flex-end", gap: 8, maxWidth: 848, margin: "12px auto 0.8rem" },
+  btnClear: { padding: "8px 16px", fontSize: 15, color: "#666", background: "transparent", border: "1px solid #e0e0e0", borderRadius: 12, cursor: "pointer", fontFamily: "inherit" },
+  btnSearch: { padding: "8px 20px", fontSize: 15, fontWeight: 500, color: "#fff", background: "#E86F00", border: "none", borderRadius: 12, fontFamily: "inherit" },
   exampleArea: { marginBottom: "1.5rem" },
   chipsLabel: { fontSize: 13, color: "#999", marginBottom: 6, textAlign: "center" },
   exampleChip: { padding: "4px 10px", fontSize: 13, color: "#E86F00", background: "#fef0e9", border: "none", borderRadius: 20, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" },
@@ -3663,7 +3672,7 @@ const styles = {
   loadingText: { fontSize: 14, color: "#999" },
   dot: { width: 6, height: 6, borderRadius: "50%", background: "#E86F00", animation: "pulse 1.2s ease-in-out infinite" },
   errorText: { fontSize: 14, color: "#A32D2D", padding: "0.5rem 0" },
-  inputPanel: { background: "#f5f5f5", border: "1px solid #e0e0e0", overflow: "hidden", boxSizing: "border-box" },
+  inputPanel: { background: "#f0f0f0", border: "none", overflow: "hidden", boxSizing: "border-box", borderRadius: 12, maxWidth: 848 },
   exampleAreaInInput: { padding: "8px 14px 10px", background: "#fff", border: "none", boxSizing: "border-box" },
   loadingStatusArea: { minHeight: 44, display: "flex", alignItems: "center", justifyContent: "flex-start", padding: "0.2rem 0 1rem", marginTop: "-0.2rem" },
   loadingStatusText: { fontSize: 17, fontWeight: 600, color: "#E86F00", letterSpacing: "-0.01em" },
@@ -3720,7 +3729,7 @@ const styles = {
   caseTag: { padding: "4px 10px", fontSize: 13, color: "#555", background: "#f0f0f0", borderRadius: 2 },
 
   bottomBrowseSection: { width: 1000, margin: "0 auto 5rem", padding: "0 2rem", boxSizing: "border-box" },
-  btnBrowseAll: { width: "100%", padding: "14px", fontSize: 16, fontWeight: 600, color: "#1a1a1a", background: "#F2F2F2", border: "1px solid #ddd", borderRadius: 2, cursor: "pointer", transition: "all 0.2s" },
+  btnBrowseAll: { width: "100%", padding: "14px", fontSize: 16, fontWeight: 600, color: "#1a1a1a", background: "#f0f0f0", border: "none", borderRadius: 12, cursor: "pointer", transition: "all 0.2s" },
   allListWrapper: { background: "#fff", border: "1px solid #ede8e2", borderRadius: 2, padding: 24, marginTop: 10 },
   allListHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
   allListTitle: { fontSize: 18, fontWeight: 700, color: "#1a1a1a", margin: 0 },
