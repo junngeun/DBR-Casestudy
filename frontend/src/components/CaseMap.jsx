@@ -363,6 +363,8 @@ export default function CaseMap({
   });
   const onCaseClickRef = useRef(onCaseClick);
   const lastSelectRef = useRef({ key: "", time: 0 });
+  const shouldCenterSelectedRef = useRef(false);
+  const lastCenteredCaseRef = useRef("");
 
   const [viewMode, setViewMode] = useState("dynamic");
   const [selectedCaseKey, setSelectedCaseKey] = useState("");
@@ -396,6 +398,7 @@ export default function CaseMap({
     }
 
     lastSelectRef.current = { key: caseKey, time: now };
+    shouldCenterSelectedRef.current = true;
     setSelectedCaseKey(caseKey);
     setCenterRequestCount((prev) => prev + 1);
 
@@ -566,17 +569,31 @@ export default function CaseMap({
 
     if (!targetCase) return;
 
-    setSelectedCaseKey(getCaseIdentity(targetCase));
+    const targetKey = getCaseIdentity(targetCase);
+    const centerKey = `${viewMode}:${targetKey}`;
+
+    setSelectedCaseKey(targetKey);
+
+    if (lastCenteredCaseRef.current === centerKey) return;
+
+    lastCenteredCaseRef.current = centerKey;
     centerCaseOnMap(targetCase, viewMode);
   }, [focusCaseId, scatterCases, dynamicCases, viewMode, centerCaseOnMap, getCaseIdentity]);
 
   useEffect(() => {
     if (!selectedCaseKey || !svgRef.current || !zoomRef.current) return;
 
+    if (!shouldCenterSelectedRef.current) return;
+
+    shouldCenterSelectedRef.current = false;
+
     const sourceCases = viewMode === "dynamic" ? dynamicCases : scatterCases;
     const targetCase = sourceCases.find((item) => getCaseIdentity(item) === selectedCaseKey);
 
     if (!targetCase) return;
+
+    const centerKey = `${viewMode}:${selectedCaseKey}`;
+    lastCenteredCaseRef.current = centerKey;
 
     centerCaseOnMap(targetCase, viewMode);
   }, [selectedCaseKey, centerRequestCount, scatterCases, dynamicCases, viewMode, centerCaseOnMap, getCaseIdentity]);
@@ -1162,7 +1179,7 @@ export default function CaseMap({
       .attr("text-anchor", "middle")
       .attr("font-size", 12)
       .attr("fill", "#6b7280")
-      .text("중심에 가까울수록 현재 입력한 고민과 더 가까운 사례입니다.");
+      .text("중심에 가까울수록 현재 입력한 고민과 더 가까운 사례에요.");
 
     const legend = root
       .append("g")
@@ -1788,7 +1805,7 @@ export default function CaseMap({
           <div style={styles.emptyText}>검색 후 추천 결과 맵을 확인할 수 있습니다.</div>
         )}
 
-        <div style={styles.areaBadge}>
+        {/* <div style={styles.areaBadge}>
           <span style={styles.areaLabel}>
             {viewMode === "dynamic" ? "현재 맵 기준" : "현재 영역"}
           </span>
@@ -1798,7 +1815,7 @@ export default function CaseMap({
           {viewMode === "dynamic" && (
             <span style={styles.areaDesc}>TOP5와 40% 이상 관련 후보만 표시됩니다.</span>
           )}
-        </div>
+        </div> */}
 
         {hoveredCase && (
           <div

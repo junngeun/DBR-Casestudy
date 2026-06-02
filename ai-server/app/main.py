@@ -741,7 +741,7 @@ def make_result_status(results: List[Dict[str, Any]]) -> Dict[str, str]:
     if not results:
         return {
             "status": "NO_RESULT",
-            "message": "추천 결과가 없습니다."
+            "message": "아직 추천할 만한 케이스를 찾지 못했어요."
         }
 
     conditions = [normalize_condition(r.get("condition_match")) for r in results]
@@ -749,24 +749,24 @@ def make_result_status(results: List[Dict[str, Any]]) -> Dict[str, str]:
     if "full" in conditions:
         return {
             "status": "DIRECT_MATCH",
-            "message": "사용자 질의와 직접적으로 부합하는 케이스가 포함되어 있습니다."
+            "message": "입력한 고민과 잘 맞는 DBR 케이스를 찾았어요."
         }
 
     if "mostly" in conditions:
         return {
             "status": "CLOSE_MATCH",
-            "message": "사용자 질의와 대부분 부합하는 케이스가 포함되어 있습니다. 일부 조건은 약할 수 있습니다."
+            "message": "입력한 고민과 꽤 가까운 케이스를 찾았어요. 일부 조건은 조금 다를 수 있어요."
         }
 
     if "partial" in conditions or "weak" in conditions:
         return {
             "status": "ALTERNATIVE_MATCH",
-            "message": "정확히 일치하는 케이스는 부족합니다. 아래 결과는 핵심 조건 중 일부와 관련된 대체 참고 사례입니다."
+            "message": "완전히 같은 케이스는 아니지만, 고민과 연결되는 참고 케이스를 찾았어요."
         }
 
     return {
         "status": "LOW_MATCH",
-        "message": "사용자 질의와 직접적으로 맞는 케이스를 찾기 어렵습니다. 검색어를 더 구체화하는 것이 좋습니다."
+        "message": "지금 입력만으로는 딱 맞는 케이스를 찾기 어려워요. 산업, 문제 상황, 원하는 방향을 조금 더 적어보세요."
     }
 
 

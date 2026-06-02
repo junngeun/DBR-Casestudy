@@ -16,11 +16,22 @@ const KEYWORDS = {
 const SYSTEM_PROMPT = `당신은 DBR(동아비즈니스리뷰) 케이스 아틀라스 서비스의 AI 분석 엔진입니다.`;
 
 const EXAMPLE_QUERIES = [
-  "리테일 업종에서 3년 차 마케터인데, 브랜드 인지도는 높아졌는데 실제 구매 전환율이 너무 낮아요.",
-  "식음료 스타트업 창업한지 2년차, 매출은 나오는데 수익성이 계속 악화되고 있어요.",
-  "IT 플랫폼 기업 신사업팀 4년 차인데, 새로운 시장에 진입하려는데 어디서부터 시작해야 할까요?",
-  "커머스 회사 PM입니다. 신규 유저는 늘고 있는데 고객 이탈률이 높아서 고민이에요.",
-  "헬스케어 스타트업 대표인데, 기술은 있는데 어떤 고객층부터 공략해야 할지 방향을 못 잡겠어요.",
+  "브랜드 인지도는 높아졌는데 구매 전환율이 낮아요.",
+  "매출은 나오는데 수익성이 계속 악화되고 있어요.",
+  "새로운 시장에 진입하려는데 어디서부터 시작해야 할지 모르겠어요.",
+  "신규 유저는 늘고 있는데 고객 이탈률이 높아요.",
+  "기술은 있는데 어떤 고객층부터 공략해야 할지 모르겠어요.",
+];
+
+const HERO_KEYWORDS = [
+  "떠나는 고객 문제를",
+  "오르지 않는 매출을",
+  "낮은 구매 전환율을",
+  "오래된 브랜드 이미지를",
+  "막막한 시장 진입 문제를",
+  "줄어드는 재방문을",
+  "늘어나는 운영 비용을",
+  "정체된 성장을",
 ];
 
 const getStatusLabel = (status) => {
@@ -104,6 +115,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
   const resultSectionRef = useRef(null);
 
   const [exampleIndex, setExampleIndex] = useState(0);
+  const [heroIndex, setHeroIndex] = useState(0);
 
   useEffect(() => {
     const savedHistory = JSON.parse(localStorage.getItem("businessQueryHistory") || "[]");
@@ -114,6 +126,13 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
     const timer = setInterval(() => {
       setExampleIndex(prev => (prev + 1) % EXAMPLE_QUERIES.length);
     }, 2800);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setHeroIndex(prev => (prev + 1) % HERO_KEYWORDS.length);
+    }, 2300);
     return () => clearInterval(timer);
   }, []);
 
@@ -353,29 +372,29 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
   }, [loadingApplyStrategy]);
 
   const getLoadingText = (percent) => {
-    if (loadingSearchMode === "apply") {
-      if (loadingApplyStrategy) {
-        const applySteps = [
-          "추천 케이스를 내 상황에 맞게 해석하는 중...",
-          "실행 가능한 적용 전략을 구성하는 중...",
-          "주의할 점과 우선순위를 정리하는 중...",
-          "맞춤 전략을 보기 좋게 정리하는 중...",
-        ];
+  if (loadingSearchMode === "apply") {
+    if (loadingApplyStrategy) {
+      const applySteps = [
+      "추천 케이스와 내 상황을 연결하고 있어요",
+      "적용할 수 있는 전략을 찾고 있어요",
+      "실행 순서와 주의점을 정리하고 있어요",
+      "맞춤 전략을 완성하고 있어요",
+    ];
 
-        return applySteps[loadingApplyStep % applySteps.length];
-      }
-
-      if (percent < 30) return "입력하신 현재 상황을 분석하는 중...";
-      if (percent < 60) return "관련 DBR 케이스를 탐색하는 중...";
-      if (percent < 90) return "추천 케이스와 상황의 연결점을 확인하는 중...";
-      return "맞춤 전략 생성을 준비하는 중...";
+      return applySteps[loadingApplyStep % applySteps.length];
     }
 
-    if (percent < 30) return "입력하신 비즈니스 문제를 분석하는 중...";
-    if (percent < 60) return "DBR 아카이브에서 유사 상황을 탐색하는 중...";
-    if (percent < 90) return "AI가 해결 전략과 케이스를 매칭하는 중...";
-    return "최적의 케이스를 마무리 정리하는 중...";
-  };
+    if (percent < 30) return "내 역할과 고민을 정리하고 있어요";
+    if (percent < 60) return "상황에 맞는 DBR 케이스를 찾고 있어요";
+    if (percent < 90) return "케이스와 내 상황의 연결점을 살펴보고 있어요";
+    return "맞춤 전략을 만들 준비를 하고 있어요";
+  }
+
+  if (percent < 30) return "입력한 고민을 DBR 기준으로 정리하고 있어요";
+  if (percent < 60) return "비슷한 문제를 다룬 케이스를 찾고 있어요";
+  if (percent < 90) return "해결 방식이 가까운 케이스를 추리고 있어요";
+  return "추천 케이스를 보기 좋게 정리하고 있어요";
+};
 
   const handleToggleBookmark = async (caseData) => {
     const token = localStorage.getItem("token");
@@ -1224,11 +1243,22 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
   return (
     <>
       <style>{`
+        body {
+          font-family: 'Karrot Sans', 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Segoe UI', sans-serif;
+        }
+
         @keyframes fadeInOut {
           0% { opacity: 0; }
           15% { opacity: 1; }
           85% { opacity: 1; }
           100% { opacity: 0; }
+        }
+
+        @keyframes heroKeywordSlide {
+          0% { opacity: 0; transform: translateY(18px); }
+          16% { opacity: 1; transform: translateY(0); }
+          82% { opacity: 1; transform: translateY(0); }
+          100% { opacity: 0; transform: translateY(-16px); }
         }
 
         @keyframes loadingPageFlip {
@@ -1268,10 +1298,14 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
         <div style={styles.searchMainCol}>
           <div style={styles.page}>
         <div style={styles.logoArea}>
-          <h1 style={styles.logoTitle}>
-            어떤 비즈니스 문제를{" "}
-            <span style={{ color: "#E86F00" }}>해결하려 하시나요?</span>
-          </h1>
+          <div style={styles.heroTitleWrap}>
+            <h1 style={styles.logoTitle}>
+              <span key={heroIndex} style={styles.heroKeyword}>
+                {HERO_KEYWORDS[heroIndex]}
+              </span>{" "}
+              <span style={{ color: "#E86F00" }}>해결하려 하시나요?</span>
+            </h1>
+          </div>
         </div>
 
         <div style={{ ...styles.filterWrapper, margin: "0 auto 1.5rem" }}>
@@ -1358,14 +1392,14 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
                   <div style={styles.searchModeHelpItem}>
                     <span style={styles.searchModeHelpBadge}>관련 케이스 찾기</span>
                     <p style={styles.searchModeHelpText}>
-                      입력한 비즈니스 고민과 유사한 DBR 케이스를 추천합니다. <br/>빠르게 참고 케이스를 찾고 싶을 때 사용합니다.
+                      입력한 고민과 비슷한 DBR 케이스를 빠르게 찾아드려요.
                     </p>
                   </div>
 
                   <div style={styles.searchModeHelpItemLast}>
                     <span style={styles.searchModeHelpBadge}>내 상황에 적용하기</span>
                     <p style={styles.searchModeHelpText}>
-                      직무·상황·제약 조건을 바탕으로 케이스를 찾고, <br/>추천 케이스를 바탕으로 내 상황에 맞는 맞춤 전략을 제공합니다.
+                      직무와 상황을 바탕으로 케이스를 찾고, <br/>내 상황에 맞는 실행 방향까지 정리해드려요.
                     </p>
                   </div>
                 </div>
@@ -1402,7 +1436,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
               <div style={styles.applyModeHeader}>
                 <p style={styles.applyModeTitle}>관련 케이스 찾기</p>
                 <p style={styles.applyModeDesc}>
-                  비즈니스 고민을 자유롭게 입력하면 관련 DBR 케이스를 추천합니다.
+                  해결하고 싶은 비즈니스 고민을 적으면, 비슷한 DBR 케이스를 찾아드려요.
                 </p>
               </div>
 
@@ -1419,7 +1453,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
                     borderRadius: 0,
                     marginBottom: 0,
                   }}
-                  placeholder="비즈니스 고민을 자유롭게 입력해주세요."
+                  placeholder="지금 해결하고 싶은 비즈니스 고민을 적어주세요."
                   value={query}
                   onChange={(e) => {
                     setQuery(e.target.value);
@@ -1480,7 +1514,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
               )}
 
               <div style={styles.searchExampleBoxSeparate}>
-                <span style={styles.searchExampleLabel}>예시 고민</span>
+                <span style={styles.searchExampleLabel}>입력 예시</span>
                 <p key={exampleIndex} style={styles.searchExampleText}>
                   {EXAMPLE_QUERIES[exampleIndex]}
                 </p>
@@ -1491,31 +1525,31 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
               <div style={styles.applyModeHeader}>
                 <p style={styles.applyModeTitle}>추천 케이스 내 상황에 적용하기</p>
                 <p style={styles.applyModeDesc}>
-                  직무, 문제 상황, 제약 조건을 나눠 입력하면 추천 케이스를 찾은 뒤 맞춤 전략까지 자동으로 생성합니다.
+                  내 역할과 고민을 알려주면, 추천 케이스를 바탕으로 실행 방향을 정리해드려요.
                   
                 </p>
               </div>
 
               <div style={styles.applyInputGrid}>
                 <label style={styles.applyField}>
-                  <span style={styles.applyFieldLabel}>직무 / 역할</span>
+                  <span style={styles.applyFieldLabel}>내 역할</span>
                   <input
                     type="text"
                     style={styles.applyInput}
                     value={applyRole}
                     onChange={(e) => setApplyRole(e.target.value)}
-                    placeholder="예: 커머스 서비스 PM, CRM 담당자, 신사업 기획자"
+                    placeholder="예: 커머스 서비스 PM"
                     disabled={loading}
                   />
                 </label>
 
                 <label style={styles.applyFieldWide}>
-                  <span style={styles.applyFieldLabel}>현재 문제 상황</span>
+                  <span style={styles.applyFieldLabel}>현재 고민</span>
                   <textarea
                     style={styles.applyTextarea}
                     value={applySituation}
                     onChange={(e) => setApplySituation(e.target.value)}
-                    placeholder="예: 방문자와 상품 조회 수는 늘고 있지만 실제 구매 전환율이 낮아 매출 성장으로 이어지지 않고 있습니다."
+                    placeholder="예: 방문자는 늘고 있는데 실제 구매 전환율이 낮아 매출로 잘 이어지지 않아요."
                     disabled={loading}
                   />
                 </label>
@@ -1526,7 +1560,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
                     style={styles.applyTextareaSmall}
                     value={applyConstraint}
                     onChange={(e) => setApplyConstraint(e.target.value)}
-                    placeholder="예: 가격 할인에 의존하기보다 고객 경험과 구매 여정을 개선해 전환율을 높이는 방법을 찾고 싶습니다."
+                    placeholder="예: 가격 할인보다 고객 경험을 개선해서 전환율을 높이고 싶어요."
                     disabled={loading}
                   />
                 </label>
@@ -1541,14 +1575,14 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
               onMouseLeave={() => setClearBtnHover(false)}
               onClick={handleClear}
               disabled={isSearchDisabled && selectedIndustry === null}
-            >초기화</button>
+            >다시 입력</button>
             <button
               style={{ ...styles.btnSearch, background: btnHover ? "#C45E00" : "#E86F00", opacity: isSearchDisabled ? 0.5 : 1, cursor: isSearchDisabled ? "not-allowed" : "pointer" }}
               onMouseEnter={() => setBtnHover(true)}
               onMouseLeave={() => setBtnHover(false)}
               onClick={handleSearch}
               disabled={isSearchDisabled}
-            >{searchMode === "apply" ? "맞춤 전략 생성 시작" : "케이스 탐색 시작"}</button>
+            >{searchMode === "apply" ? "맞춤 전략 받기" : "케이스 찾아보기"}</button>
           </div>
         </div>
 
@@ -1752,6 +1786,12 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
           isBookmarked={bookmarkedCaseIds.has(String(selectedCase.case_idx ?? selectedCase.id))}
           onToggleBookmark={() => handleToggleBookmark(selectedCase)}
           onClose={() => setSelectedCase(null)}
+          hasRecommendationResult={!!result?.cases?.length}
+          isTopRecommendedCase={recommendedCaseIds.includes(String(selectedCase.case_idx ?? selectedCase.id))}
+          onOpenPersonalStrategy={() => {
+            setPersonalStrategyError(null);
+            setShowPersonalStrategyModal(true);
+          }}
         />
       )}
       {showCompare && (
@@ -1838,13 +1878,13 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
         <div style={styles.fullScreenLoading}>
           <div style={styles.invalidNoticeContent}>
             <div style={styles.invalidNoticeIcon}>!</div>
-            <p style={styles.invalidNoticeTitle}>검색 의도를 확인하기 어려워요</p>
+            <p style={styles.invalidNoticeTitle}>입력 내용을 다시 확인해주세요</p>
             <p style={styles.invalidNoticeText}>{invalidNotice}</p>
             <div style={styles.invalidNoticeExamples}>
               <span style={styles.invalidNoticeExampleLabel}>이렇게 입력해보세요</span>
               <p style={styles.invalidNoticeExampleText}>고객 이탈률을 줄이고 싶어요</p>
-              <p style={styles.invalidNoticeExampleText}>신사업 진입 전략을 참고하고 싶어요</p>
-              <p style={styles.invalidNoticeExampleText}>브랜드 인지도는 높은데 구매 전환이 안 돼요</p>
+              <p style={styles.invalidNoticeExampleText}>새로운 시장에 진입하는 방법을 찾고 싶어요</p>
+              <p style={styles.invalidNoticeExampleText}>브랜드 인지도는 높은데 구매 전환율이 낮아요</p>
             </div>
           </div>
         </div>
@@ -1932,7 +1972,7 @@ function PopularRankBoard({
     <div style={styles.popularRankBoard}>
       <div style={styles.popularRankColumn}>
         <div style={styles.popularColumnHeader}>
-          <h3 style={styles.popularTitle}>인기 케이스</h3>
+          <h3 style={styles.popularTitle}>많이 본 케이스</h3>
           <span style={styles.popularBadge}>TOP 5</span>
         </div>
 
@@ -1969,7 +2009,7 @@ function PopularRankBoard({
 
       <div style={styles.popularRankColumn}>
         <div style={styles.popularColumnHeader}>
-          <h3 style={styles.popularTitle}>인기 키워드</h3>
+          <h3 style={styles.popularTitle}>많이 찾은 고민</h3>
           <span style={styles.popularBadge}>TOP 10</span>
         </div>
 
@@ -2010,7 +2050,7 @@ function PopularCaseBox({ cases, loading, error, onCaseClick }) {
       <div style={styles.popularHeader}>
         <div>
           {/* <p style={styles.popularEyebrow}>실시간 탐색 데이터</p> */}
-          <h3 style={styles.popularTitle}>인기 케이스</h3>
+          <h3 style={styles.popularTitle}>많이 본 케이스</h3>
         </div>
         <span style={styles.popularBadge}>TOP 5</span>
       </div>
@@ -2103,14 +2143,14 @@ function AnalysisModal({ result, onClose }) {
       <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000 }} onClick={onClose} />
       <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: 500, background: "#fff", borderRadius: 16, zIndex: 1100, padding: 32, boxShadow: "0 10px 30px rgba(0,0,0,0.15)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-          <h2 style={{ fontSize: 22, fontWeight: 700, color: "#1a1a1a", margin: 0 }}>AI 문제 구조화</h2>
+          <h2 style={{ fontSize: 22, fontWeight: 700, color: "#1a1a1a", margin: 0 }}>AI 분석 결과</h2>
           <button style={{ background: "none", border: "none", fontSize: 24, color: "#999", cursor: "pointer", lineHeight: 1 }} onClick={onClose}>✕</button>
         </div>
         <p style={styles.problemSummary}>{result.problem_summary}</p>
         <hr style={styles.divider} />
-        <TagSection label="문제 유형" tags={result.problem_types || []} color="type" />
-        <TagSection label="핵심 KPI" tags={result.kpis || []} color="kpi" />
-        <TagSection label="예상 원인" tags={result.causes || []} color="cause" />
+        <TagSection label="고민 유형" tags={result.problem_types || []} color="type" />
+        <TagSection label="핵심 지표" tags={result.kpis || []} color="kpi" />
+        <TagSection label="이렇게 판단했어요" tags={result.causes || []} color="cause" />
         <button style={{ ...styles.btnSearch, width: "100%", marginTop: 24 }} onClick={onClose}>확인</button>
       </div>
     </>
@@ -2168,9 +2208,9 @@ function PersonalStrategyModal({ value, onChange, loading, error, caseCount, onC
         <div style={styles.personalModalHeader}>
           <div>
             <p style={styles.personalModalLabel}>추천 케이스를 내 상황에 적용하기</p>
-            <h2 style={styles.personalModalTitle}>현재 상황을 입력해주세요</h2>
+            <h2 style={styles.personalModalTitle}>현재 상황을 알려주세요</h2>
             <p style={styles.personalModalDesc}>
-              입력한 내용은 추천 케이스를 내 상황에 맞게 해석하는 데 사용됩니다.
+              입력한 내용을 바탕으로 추천 케이스를 내 상황에 맞게 해석해드려요.
             </p>
           </div>
 
@@ -2187,7 +2227,8 @@ function PersonalStrategyModal({ value, onChange, loading, error, caseCount, onC
         <div style={styles.personalExampleBox}>
           <p style={styles.personalExampleTitle}>예시</p>
           <p style={styles.personalExampleText}>
-            저는 CRM 마케팅을 맡고 있고, 고객 이탈률을 줄여야 합니다. <br/>예산이 많지 않아 바로 실행할 수 있는 작은 개선 방향을 찾고 싶어요.
+            CRM 마케팅을 맡고 있고, 고객 이탈률을 줄이고 싶어요.
+            <br/>예산이 많지 않아 바로 실행할 수 있는 작은 개선 방향이 필요해요.
           </p>
         </div>
 
@@ -2195,7 +2236,7 @@ function PersonalStrategyModal({ value, onChange, loading, error, caseCount, onC
           style={styles.personalTextarea}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="현재 역할, 문제 상황, 제약 조건을 자유롭게 입력해주세요."
+          placeholder="내 역할, 고민, 제약 조건을 자유롭게 적어주세요."
           disabled={loading}
         />
 
@@ -2498,7 +2539,18 @@ function formatPersonalStrategyExportHtml(value, escapeHtml) {
     .join("");
 }
 
-function CasePanel({ caseData, selectedCases, isSelected, isBookmarked, onToggleSelect, onToggleBookmark, onClose }) {
+function CasePanel({
+  caseData,
+  selectedCases,
+  isSelected,
+  isBookmarked,
+  onToggleSelect,
+  onToggleBookmark,
+  onClose,
+  hasRecommendationResult = false,
+  isTopRecommendedCase = false,
+  onOpenPersonalStrategy,
+}) {
   const [linkHover, setLinkHover] = useState(false); 
   const [addHover, setAddHover] = useState(false);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
@@ -2523,6 +2575,14 @@ function CasePanel({ caseData, selectedCases, isSelected, isBookmarked, onToggle
     if (caseData.src_url) {
       window.open(caseData.src_url, "_blank", "noopener,noreferrer");
     }
+  };
+
+  const getPersonalStrategyEmptyMessage = () => {
+    if (hasRecommendationResult && !isTopRecommendedCase) {
+      return "맞춤 전략은 추천 TOP5 케이스에서만 확인할 수 있어요.";
+    }
+
+    return "현재 상황을 입력하면, 이 케이스를 어떻게 활용할 수 있을지 정리해드려요.";
   };
 
   return (
@@ -2553,7 +2613,7 @@ function CasePanel({ caseData, selectedCases, isSelected, isBookmarked, onToggle
           style={{ 
             width: "100%", padding: "12px", fontSize: 14, fontWeight: 600, 
             color: "#fff", background: isSelected ? "#1a1a1a" : selectedCases.length >= 3 && !isSelected ? "#ccc" : addHover ? "#C45E00" : "#E86F00", 
-            border: "none", borderRadius: 2, cursor: isSelected || selectedCases.length < 3 ? "pointer" : "not-allowed", 
+            border: "none", borderRadius: 12, cursor: isSelected || selectedCases.length < 3 ? "pointer" : "not-allowed", 
             fontFamily: "inherit", transition: "all 0.2s"
           }}
           onClick={onToggleSelect}
@@ -2583,7 +2643,7 @@ function CasePanel({ caseData, selectedCases, isSelected, isBookmarked, onToggle
 
         {caseData.prob_def && (
           <div style={styles.reasonBoxWhite}>
-            <p style={styles.reasonTitleDark}>문제 정의</p>
+            <p style={styles.reasonTitleDark}>문제 상황</p>
             <p style={styles.reasonItem}>{caseData.prob_def}</p>
           </div>
         )}
@@ -2621,13 +2681,22 @@ function CasePanel({ caseData, selectedCases, isSelected, isBookmarked, onToggle
           <div style={styles.personalStrategyEmptyBox}>
             <p style={styles.personalStrategyEmptyTitle}>맞춤 전략</p>
             <p style={styles.personalStrategyEmptyText}>
-              추천 결과 상단의 버튼에서 현재 상황을 입력하면 이 케이스의 적용 방향이 표시됩니다.
+              {getPersonalStrategyEmptyMessage()}
             </p>
+            {hasRecommendationResult && isTopRecommendedCase && (
+              <button
+                type="button"
+                style={styles.personalStrategyApplyBtn}
+                onClick={onOpenPersonalStrategy}
+              >
+                내 상황에 적용하기
+              </button>
+            )}
           </div>
         )}
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 24 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 24}}>
         <button 
           style={{ ...styles.panelLink, background: linkHover ? "#FEF0E9" : "#fff" }} 
           onClick={openOriginalArticle}
@@ -3949,6 +4018,7 @@ const styles = {
   personalStrategyEmptyBox: { background: "#fff", border: "1px dashed #dedede", borderRadius: 6, padding: "13px 14px", marginBottom: 12 },
   personalStrategyEmptyTitle: { margin: "0 0 7px", fontSize: 13, fontWeight: 800, color: "#777" },
   personalStrategyEmptyText: { margin: 0, fontSize: 13, lineHeight: 1.65, color: "#999", wordBreak: "keep-all" },
+  personalStrategyApplyBtn: { width: "100%", marginTop: 10, padding: "10px 12px", fontSize: 13, fontWeight: 800, color: "#fff", background: "#E86F00", border: "none", borderRadius: 12, cursor: "pointer", fontFamily: "inherit" },
   comparePersonalBox: { background: "#fff", border: "1px solid #d9e7dc", borderLeft: "3px solid #4A8F57", borderRadius: 6, padding: "12px 13px" },
   comparePersonalTitle: { margin: "0 0 7px", fontSize: 12, fontWeight: 900, color: "#2F6F3A" },
   comparePersonalText: { margin: 0, fontSize: 13, lineHeight: 1.7, color: "#444", wordBreak: "keep-all" },
@@ -4019,12 +4089,14 @@ const styles = {
   popularKeywordItem: { width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "10px 8px", background: "#fff", border: "none", borderBottom: "1px solid #f0f0f0", borderRadius: 0, cursor: "pointer", fontFamily: "inherit", textAlign: "left", transition: "all 0.2s" },
   popularKeywordText: { flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 800, color: "#1a1a1a", lineHeight: 1.35, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
   popularKeywordCount: { minWidth: 22, height: 20, padding: "0 6px", borderRadius: 999, background: "#FEF0E9", color: "#E86F00", fontSize: 12, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" },
-  page: { width: "100%", margin: "0 auto", padding: 0, fontFamily: "'Pretendard', 'Apple SD Gothic Neo', sans-serif", boxSizing: "border-box" },
+  page: { width: "100%", margin: "0 auto", padding: 0, fontFamily: "'Karrot Sans', 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Segoe UI', sans-serif", boxSizing: "border-box" },
   splitRow: { display: "flex", gap: 16, alignItems: "flex-start", width: "min(1600px, calc(100vw - 96px))", margin: "0 auto", padding: "0 0 2rem", boxSizing: "border-box" },
   caseListCol: { width: 420, flexShrink: 0, borderRight: "1px solid #e0e0e0", paddingRight: 16 },
   mapCol: { flex: 1, minWidth: 0 },
   logoArea: { marginBottom: "2.5rem", textAlign: "center" },
-  logoTitle: { fontSize: 32, fontWeight: 500, lineHeight: 1.4, color: "#1a1a1a" },
+  heroTitleWrap: { minHeight: 88, display: "flex", alignItems: "center", justifyContent: "center" },
+  heroKeyword: { display: "inline-block", minWidth: 250, textAlign: "right", fontWeight: 850, lineHeight: 1.18, letterSpacing: "-0.045em", color: "#111827", animation: "heroKeywordSlide 2.3s ease-in-out both", willChange: "transform, opacity", verticalAlign: "baseline" },
+  logoTitle: { margin: 0, fontSize: 34, fontWeight: 760, lineHeight: 1.32, letterSpacing: "-0.04em", color: "#1a1a1a", whiteSpace: "nowrap" },
   
   filterWrapper: { marginBottom: "1.5rem", background: "#fff", border: "1px solid #ede8e2", borderRadius: 12, padding: "20px 24px", boxShadow: "0 2px 10px rgba(0,0,0,0.02)", maxWidth: 800  },
   filterSection: { marginBottom: 16, paddingBottom: 16, borderBottom: "1px dashed #f0f0f0" },
@@ -4132,8 +4204,8 @@ const styles = {
   insightTextGroup: { display: "flex", flexDirection: "column", gap: 8 },
   insightParagraph: { fontSize: 13.5, color: "#555", lineHeight: 1.75, margin: 0, wordBreak: "keep-all" },
   panelActionGroup: { display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 },
-  panelSummaryBtn: { width: "100%", padding: "11px 12px", fontSize: 13.5, fontWeight: 800, color: "#E86F00", background: "#fff", border: "1px solid #E86F00", borderRadius: 2, cursor: "pointer", fontFamily: "inherit" },
-  panelLink: { width: "100%", padding: "12px", fontSize: 14, fontWeight: 600, color: "#E86F00", background: "#fff", border: "1px solid #E86F00", borderRadius: 2, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "all 0.2s" },
+  panelSummaryBtn: { width: "100%", padding: "11px 12px", fontSize: 13.5, fontWeight: 800, color: "#E86F00", background: "#fff", border: "1px solid #E86F00", borderRadius: 12, cursor: "pointer", fontFamily: "inherit" },
+  panelLink: { width: "100%", padding: "12px", fontSize: 14, fontWeight: 600, color: "#E86F00", background: "#fff", border: "1px solid #E86F00", borderRadius: 12, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "all 0.2s" },
 
   summaryPreviewHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14 },
   summaryPreviewText: { fontSize: 13, color: "#666", lineHeight: 1.5, margin: 0 },
@@ -4154,8 +4226,8 @@ const styles = {
 
   bottomBar: { position: "fixed", bottom: 0, left: 0, right: 0, background: "#1a1a1a", color: "#fff", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 24px", zIndex: 300, boxShadow: "0 -4px 12px rgba(0,0,0,0.15)" },
   bottomBarText: { fontSize: 14, fontWeight: 500 },
-  bottomBarBtnOutline: { padding: "8px 16px", fontSize: 13, color: "#fff", background: "transparent", border: "1px solid #666", borderRadius: 2, cursor: "pointer" },
-  bottomBarBtnFill: { padding: "8px 16px", fontSize: 13, color: "#1a1a1a", background: "#fff", border: "none", borderRadius: 2, cursor: "pointer" },
+  bottomBarBtnOutline: { padding: "8px 16px", fontSize: 13, color: "#fff", background: "transparent", border: "1px solid #666", borderRadius: 12, cursor: "pointer" },
+  bottomBarBtnFill: { padding: "8px 16px", fontSize: 13, color: "#1a1a1a", background: "#fff", border: "none", borderRadius: 12, cursor: "pointer" },
 
   fullScreenLoading: {
     position: "fixed",
@@ -4759,14 +4831,15 @@ searchExampleBar: {
 
 searchExampleLabel: {
   fontSize: 12,
-  color: "#888",
+  fontWeight : 700,
+  color: "#E86F00",
   flexShrink: 0,
 },
 
 searchExampleText: {
   margin: 0,
   fontSize: 13,
-  color: "#888",
+  color: "#777",
   animation: "fadeInOut 4.0s ease-in-out",
   overflow: "hidden",
   textOverflow: "ellipsis",
@@ -4800,18 +4873,18 @@ searchExampleBoxSeparate: {
 
 applyModePanel: {
   maxWidth: 848,
-  minHeight: 330,
+  minHeight: 286,
   margin: "0 auto",
   background: "#fff",
   border: "1px solid #eeeeee",
   borderRadius: 14,
-  padding: 18,
+  padding: 16,
   boxSizing: "border-box",
   boxShadow: "0 8px 22px rgba(0,0,0,0.04)",
 },
 
 applyModeHeader: {
-  marginBottom: 14,
+  marginBottom: 10,
 },
 
 applyModeTitle: {
@@ -4831,20 +4904,20 @@ applyModeDesc: {
 applyInputGrid: {
   display: "grid",
   gridTemplateColumns: "1fr",
-  gap: 12,
+  gap: 9,
 },
 
 applyField: {
   display: "flex",
   flexDirection: "column",
-  gap: 6,
+  gap: 5,
   fontFamily: "inherit",
 },
 
 applyFieldWide: {
   display: "flex",
   flexDirection: "column",
-  gap: 6,
+  gap: 5,
   fontFamily: "inherit",
 },
 
@@ -4859,9 +4932,9 @@ applyInput: {
   boxSizing: "border-box",
   border: "1px solid #e6e6e6",
   borderRadius: 10,
-  padding: "12px 13px",
-  fontSize: 14,
-  lineHeight: 1.5,
+  padding: "10px 12px",
+  fontSize: 13,
+  lineHeight: 1.45,
   color: "#333",
   background: "#fafafa",
   outline: "none",
@@ -4870,14 +4943,14 @@ applyInput: {
 
 applyTextarea: {
   width: "100%",
-  minHeight: 70,
+  minHeight: 54,
   resize: "vertical",
   boxSizing: "border-box",
   border: "1px solid #e6e6e6",
   borderRadius: 10,
-  padding: "12px 13px",
-  fontSize: 14,
-  lineHeight: 1.6,
+  padding: "10px 12px",
+  fontSize: 13,
+  lineHeight: 1.45,
   color: "#333",
   background: "#fafafa",
   outline: "none",
@@ -4886,14 +4959,14 @@ applyTextarea: {
 
 applyTextareaSmall: {
   width: "100%",
-  minHeight: 70,
+  minHeight: 54,
   resize: "vertical",
   boxSizing: "border-box",
   border: "1px solid #e6e6e6",
   borderRadius: 10,
-  padding: "12px 13px",
-  fontSize: 14,
-  lineHeight: 1.6,
+  padding: "10px 12px",
+  fontSize: 13,
+  lineHeight: 1.45,
   color: "#333",
   background: "#fafafa",
   outline: "none",
