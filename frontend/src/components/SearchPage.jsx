@@ -4824,19 +4824,19 @@ searchModeHelpWrap: {
 },
 
 searchModeHelpBtn: {
-  width: 30,
-  height: 30,
+  width: 25,
+  height: 25,
   borderRadius: "50%",
   border: "1px solid #fa8f51",
   background: "#fff",
   color: "#fa8f51",
-  fontSize: 14,
-  fontWeight: 800,
+  fontSize: 13,
+  fontWeight: 750,
   cursor: "pointer",
   fontFamily: "inherit",
   boxShadow: "0 4px 10px rgba(0,0,0,0.06)",
-  marginTop : 10,
-  marginLeft : 2
+  marginTop : 13,
+  marginLeft : 3
 },
 
 searchModeHelpTooltip: {
