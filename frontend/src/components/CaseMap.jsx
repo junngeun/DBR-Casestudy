@@ -556,7 +556,7 @@ export default function CaseMap({
   }, [getRenderedPointForCase, viewMode]);
 
   useEffect(() => {
-    if (!focusCaseId || !svgRef.current || !zoomRef.current) return;
+    if (!focusCaseId || !svgRef.current) return;
 
     const sourceCases = viewMode === "dynamic" ? dynamicCases : scatterCases;
 
@@ -574,6 +574,8 @@ export default function CaseMap({
 
     setSelectedCaseKey(targetKey);
 
+    if (viewMode !== "dynamic") return;
+    if (!zoomRef.current) return;
     if (lastCenteredCaseRef.current === centerKey) return;
 
     lastCenteredCaseRef.current = centerKey;
@@ -581,13 +583,16 @@ export default function CaseMap({
   }, [focusCaseId, scatterCases, dynamicCases, viewMode, centerCaseOnMap, getCaseIdentity]);
 
   useEffect(() => {
-    if (!selectedCaseKey || !svgRef.current || !zoomRef.current) return;
+    if (!selectedCaseKey || !svgRef.current) return;
 
     if (!shouldCenterSelectedRef.current) return;
 
     shouldCenterSelectedRef.current = false;
 
-    const sourceCases = viewMode === "dynamic" ? dynamicCases : scatterCases;
+    if (viewMode !== "dynamic") return;
+    if (!zoomRef.current) return;
+
+    const sourceCases = dynamicCases;
     const targetCase = sourceCases.find((item) => getCaseIdentity(item) === selectedCaseKey);
 
     if (!targetCase) return;
@@ -596,7 +601,7 @@ export default function CaseMap({
     lastCenteredCaseRef.current = centerKey;
 
     centerCaseOnMap(targetCase, viewMode);
-  }, [selectedCaseKey, centerRequestCount, scatterCases, dynamicCases, viewMode, centerCaseOnMap, getCaseIdentity]);
+  }, [selectedCaseKey, centerRequestCount, dynamicCases, viewMode, centerCaseOnMap, getCaseIdentity]);
 
   useEffect(() => {
     const isTypingTarget = (target) => {
@@ -852,7 +857,7 @@ export default function CaseMap({
       .attr("width", innerW)
       .attr("height", innerH)
       .attr("fill", "transparent")
-      .style("cursor", "grab");
+      .style("cursor", "default");
 
     axisLayer
       .append("line")
@@ -958,44 +963,16 @@ export default function CaseMap({
       mode: "scatter",
     });
 
-    const updateCurrentArea = (transform) => {
-      const centerX = xScale.invert((innerW / 2 - transform.x) / transform.k);
-      const centerY = yScale.invert((innerH / 2 - transform.y) / transform.k);
-
-      setCurrentArea({
-        problem: findNearestLabel(centerX, PROBLEM_AXIS),
-        strategy: findNearestLabel(centerY, STRATEGY_AXIS),
-      });
-    };
-
-    const zoom = d3.zoom()
-      .scaleExtent([0.75, 8])
-      .translateExtent([
-        [-innerW * 0.9, -innerH * 0.9],
-        [innerW * 1.9, innerH * 1.9],
-      ])
-      .on("start", () => {
-        mapLayer.select("rect").style("cursor", "grabbing");
-      })
-      .on("zoom", (event) => {
-        currentTransformRef.current.scatter = event.transform;
-
-        mapLayer.attr(
-          "transform",
-          `translate(${margin.left},${margin.top}) ${event.transform}`
-        );
-
-        setZoomLevel(Math.round(event.transform.k * 100));
-        updateCurrentArea(event.transform);
-      })
-      .on("end", () => {
-        mapLayer.select("rect").style("cursor", "grab");
-      });
-
-    zoomRef.current = zoom;
-
-    svg.call(zoom);
-    svg.call(zoom.transform, currentTransformRef.current.scatter);
+    // 산점도는 전체 케이스의 분포를 확인하는 참고용 화면이므로
+    // 줌/드래그 인터랙션을 적용하지 않는다.
+    currentTransformRef.current.scatter = d3.zoomIdentity;
+    zoomRef.current = null;
+    svg.on(".zoom", null);
+    setZoomLevel(100);
+    setCurrentArea({
+      problem: "중앙",
+      strategy: "중앙",
+    });
   };
 
   const renderDynamicMap = () => {
@@ -1727,6 +1704,7 @@ export default function CaseMap({
   };
 
   const doZoom = useCallback((factor) => {
+    if (viewMode !== "dynamic") return;
     if (!svgRef.current || !zoomRef.current) return;
 
     const svg = d3.select(svgRef.current);
@@ -1735,9 +1713,10 @@ export default function CaseMap({
       .transition()
       .duration(220)
       .call(zoomRef.current.scaleBy, factor);
-  }, []);
+  }, [viewMode]);
 
   const doReset = useCallback(() => {
+    if (viewMode !== "dynamic") return;
     if (!svgRef.current || !zoomRef.current) return;
 
     currentTransformRef.current[viewMode] = d3.zoomIdentity;
@@ -1787,7 +1766,7 @@ export default function CaseMap({
                 style={viewMode === "scatter" ? styles.viewToggleBtnActive : styles.viewToggleBtn}
                 onClick={() => handleViewModeChange("scatter")}
               >
-                산점도
+               케이스 분포 맵
               </button>
             </div>
           </div>
@@ -1848,19 +1827,19 @@ export default function CaseMap({
           </div>
         )}
 
-        <div style={styles.zoomControls}>
-          <button style={styles.zoomBtn} onClick={() => doZoom(1.3)}>+</button>
-          <span style={styles.zoomLevel}>{zoomLevel}%</span>
-          <button style={styles.zoomBtn} onClick={() => doZoom(0.77)}>−</button>
-          <div style={{ height: 1, background: "#ececec", width: "100%" }} />
-          <button style={{ ...styles.zoomBtn, fontSize: 12 }} onClick={doReset}>↺</button>
-        </div>
+        {viewMode === "dynamic" && (
+          <>
+            <div style={styles.zoomControls}>
+              <button style={styles.zoomBtn} onClick={() => doZoom(1.3)}>+</button>
+              <span style={styles.zoomLevel}>{zoomLevel}%</span>
+              <button style={styles.zoomBtn} onClick={() => doZoom(0.77)}>−</button>
+              <div style={{ height: 1, background: "#ececec", width: "100%" }} />
+              <button style={{ ...styles.zoomBtn, fontSize: 12 }} onClick={doReset}>↺</button>
+            </div>
 
-        <div style={styles.zoomHint}>
-          {viewMode === "dynamic"
-            ? "드래그로 이동 · 휠로 확대/축소"
-            : "드래그로 이동 · 휠로 확대/축소"}
-        </div>
+            <div style={styles.zoomHint}>드래그로 이동 · 휠로 확대/축소</div>
+          </>
+        )}
       </div>
     </div>
   );
