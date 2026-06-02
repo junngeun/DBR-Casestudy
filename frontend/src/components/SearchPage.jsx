@@ -1972,7 +1972,7 @@ function PopularRankBoard({
     <div style={styles.popularRankBoard}>
       <div style={styles.popularRankColumn}>
         <div style={styles.popularColumnHeader}>
-          <h3 style={styles.popularTitle}>많이 본 케이스</h3>
+          <h3 style={styles.popularTitle}>요즘 뜨는 케이스</h3>
           <span style={styles.popularBadge}>TOP 5</span>
         </div>
 
@@ -2009,7 +2009,7 @@ function PopularRankBoard({
 
       <div style={styles.popularRankColumn}>
         <div style={styles.popularColumnHeader}>
-          <h3 style={styles.popularTitle}>많이 찾은 고민</h3>
+          <h3 style={styles.popularTitle}>자주 찾는 고민</h3>
           <span style={styles.popularBadge}>TOP 10</span>
         </div>
 
