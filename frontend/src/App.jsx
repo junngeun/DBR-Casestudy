@@ -19,6 +19,9 @@ function App() {
   const [bookmarkCount, setBookmarkCount] = useState(0);
   const [signupHover, setSignupHover] = useState(false);
   const [loginHover, setLoginHover] = useState(false);
+  
+  // 말풍선 표시 상태
+  const [showTooltip, setShowTooltip] = useState(false);
 
   const fetchBookmarkCount = async () => {
     const token = localStorage.getItem("token");
@@ -117,6 +120,15 @@ function App() {
     };
   }, []);
 
+  // 검색 결과가 있을 때(검색 완료 시) 말풍선을 띄우고 7초 뒤에 숨김
+  useEffect(() => {
+    if (searchedCases && searchedCases.length > 0) {
+      setShowTooltip(true);
+      // const timer = setTimeout(() => setShowTooltip(false), 7000);
+      return () => clearTimeout(timer);
+    }
+  }, [searchedCases]);
+
   const navigateTo = (pageName) => {
     if (page === pageName) return; 
     window.scrollTo(0, 0);
@@ -130,14 +142,14 @@ function App() {
   };
 
   const goBack = () => {
-  if (history.length === 0) return; 
-  const newHistory = [...history];
-  const prevPage = newHistory.pop(); 
-  setHistory(newHistory); 
-  setPage(prevPage); 
-  window.scrollTo(0, 0);
-  document.body.style.overflow = "";
-};
+    if (history.length === 0) return; 
+    const newHistory = [...history];
+    const prevPage = newHistory.pop(); 
+    setHistory(newHistory); 
+    setPage(prevPage); 
+    window.scrollTo(0, 0);
+    document.body.style.overflow = "";
+  };
 
   const handleAuthSuccess = (loginMember) => {
     setMember(loginMember);
@@ -166,6 +178,16 @@ function App() {
 
   return (
     <div>
+      {/* 애니메이션을 위한 style 태그 추가 */}
+      <style>
+        {`
+          @keyframes tooltip-bounce {
+            0%, 100% { transform: translateY(-50%); }
+            50% { transform: translateY(calc(-50% - 5px)); }
+          }
+        `}
+      </style>
+      
       <header style={{
         display: "flex", alignItems: "center", justifyContent: "center",
         padding: 0, height: 72,
@@ -190,18 +212,65 @@ function App() {
 
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
           
-          {/* 1. 케이스 요청 버튼 */}
-          <button
-            onClick={() => navigateTo("request")}
-            style={styles.iconHeaderBtn}
-            title="신규 케이스 요청"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
-              <line x1="12" y1="8" x2="12" y2="12"></line>
-              <line x1="10" y1="10" x2="14" y2="10"></line>
-            </svg>
-          </button>
+          {/* 1. 케이스 요청 버튼 + 말풍선 */}
+          <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+            
+            {/* 말풍선을 버튼의 왼쪽으로 배치 (left: "100%" -> right: "100%", margin 방향 변경) */}
+            {showTooltip && (
+              <div 
+                style={{ 
+                  position: "absolute", 
+                  top: "50%", 
+                  right: "100%", 
+                  marginRight: "12px", 
+                  zIndex: 50,
+                  animation: "tooltip-bounce 2s infinite"
+                }}
+              >
+                <div 
+                  style={{ 
+                    position: "relative", 
+                    backgroundColor: "#E86F00", 
+                    color: "#ffffff", 
+                    fontSize: "13px", 
+                    fontWeight: "bold", 
+                    padding: "6px 12px", 
+                    borderRadius: "8px", 
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.15)", 
+                    cursor: "pointer", 
+                    whiteSpace: "nowrap" 
+                  }}
+                  onClick={() => setShowTooltip(false)}
+                >
+                  찾으시는 케이스가 없나요? 👀
+                  {/* 말풍선 꼬리를 오른쪽으로 변경 */}
+                  <div style={{ 
+                    position: "absolute", 
+                    top: "50%", 
+                    right: "-10px", 
+                    transform: "translateY(-50%)", 
+                    border: "5px solid transparent", 
+                    borderLeftColor: "#E86F00" 
+                  }}></div>
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={() => {
+                setShowTooltip(false);
+                navigateTo("request");
+              }}
+              style={styles.iconHeaderBtn}
+              title="신규 케이스 요청"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="10" y1="10" x2="14" y2="10"></line>
+              </svg>
+            </button>
+          </div>
 
           {/* 2. 최근 본 케이스 버튼 */}
           <button
