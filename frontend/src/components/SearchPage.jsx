@@ -114,6 +114,12 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
   const [clearBtnHover, setClearBtnHover] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
+  // 추천 케이스 리스트 클릭으로만 케이스맵 중앙 이동을 요청한다.
+  // selectedCase/focusCaseId는 상세 패널과 선택 표시용이고,
+  // centerTargetId/centerRequestKey는 맵 이동 명령용으로 분리한다.
+  const [centerTargetId, setCenterTargetId] = useState(null);
+  const [centerRequestKey, setCenterRequestKey] = useState(0);
+
   const [browseHover, setBrowseHover] = useState(false);
   const [showSelectedList, setShowSelectedList] = useState(false);
   const resultSectionRef = useRef(null);
@@ -864,6 +870,8 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
     setResult(null);
     setError(null);
     setInvalidNotice("");
+    setCenterTargetId(null);
+    setCenterRequestKey(0);
 
     try {
       const requestBody = {
@@ -1245,6 +1253,8 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
     setShowAllList(false);
     setVisibleCount(10);
     setHasSearched(false);
+    setCenterTargetId(null);
+    setCenterRequestKey(0);
   };
 
   const toggleSelectCase = (c) => {
@@ -1368,6 +1378,30 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
       _view_source: viewSource,
     });
     saveCaseViewLog(enrichedCase, viewSource);
+  };
+
+  const requestCaseMapCenter = (caseData) => {
+    const caseId = caseData?.case_idx ?? caseData?.id;
+
+    if (!caseId) return;
+
+    setCenterTargetId(String(caseId));
+    setCenterRequestKey((prev) => prev + 1);
+  };
+
+  const handleRecommendedCaseSelect = (caseData) => {
+    handleCaseSelect(caseData, result ? "recommend" : "archive");
+
+    const caseId = String(caseData?.case_idx ?? caseData?.id ?? "");
+    const isRecommendedResult = Boolean(
+      result?.cases?.some((item) => String(item.case_idx ?? item.id) === caseId)
+    );
+
+    // 화면 중앙 이동은 추천 케이스 리스트 TOP5 클릭일 때만 발생한다.
+    // 케이스맵 내부 점/라벨 클릭은 CaseMap의 onCaseClick만 타므로 여기로 들어오지 않는다.
+    if (isRecommendedResult) {
+      requestCaseMapCenter(caseData);
+    }
   };
 
   useEffect(() => {
@@ -1836,7 +1870,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
                     isSelected={!!selectedCases.find((s) => s.title === c.title)}
                     isViewing={selectedCase?.title === c.title}
                     isBookmarked={bookmarkedCaseIds.has(String(c.case_idx ?? c.id))}
-                    onClick={() => handleCaseSelect(c, result ? "recommend" : "archive")}
+                    onClick={() => handleRecommendedCaseSelect(c)}
                     onDoubleClick={() => toggleSelectCase(c)}
                     onToggleBookmark={() => handleToggleBookmark(c)}
                     onRemove={() => setSelectedCases(prev => prev.filter(s => s.title !== c.title))}
@@ -1852,6 +1886,8 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
               mapCandidates={result?.map_candidates || []}
               highlightedIds={recommendedCaseIds}
               focusCaseId={selectedCase?.case_idx || selectedCase?.id || null}
+              centerTargetId={centerTargetId}
+              centerRequestKey={centerRequestKey}
               onCaseClick={(caseData) => handleCaseSelect(caseData, "map")}
             />
           </div>

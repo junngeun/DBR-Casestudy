@@ -368,6 +368,8 @@ export default function CaseMap({
   mapCandidates = [],
   highlightedIds = [],
   focusCaseId = null,
+  centerTargetId = null,
+  centerRequestKey = 0,
   onCaseClick,
 }) {
   const svgRef = useRef(null);
@@ -379,12 +381,9 @@ export default function CaseMap({
   });
   const onCaseClickRef = useRef(onCaseClick);
   const lastSelectRef = useRef({ key: "", time: 0 });
-  const shouldCenterSelectedRef = useRef(false);
-  const lastCenteredCaseRef = useRef("");
 
   const [viewMode, setViewMode] = useState("dynamic");
   const [selectedCaseKey, setSelectedCaseKey] = useState("");
-  const [centerRequestCount, setCenterRequestCount] = useState(0);
   const [hoveredCase, setHoveredCase] = useState(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
   const [zoomLevel, setZoomLevel] = useState(100);
@@ -411,14 +410,17 @@ export default function CaseMap({
     const caseKey = getCaseIdentity(caseData);
     const now = Date.now();
 
-    if (lastSelectRef.current.key === caseKey && now - lastSelectRef.current.time < 180) {
+    if (lastSelectRef.current.key === caseKey && now - lastSelectRef.current.time < 120) {
       return;
     }
 
     lastSelectRef.current = { key: caseKey, time: now };
-    shouldCenterSelectedRef.current = true;
+
+    // 중요:
+    // 케이스맵 내부에서 발생한 선택은 상세 패널/선택 표시만 바꾼다.
+    // 화면 중앙 이동은 절대 여기서 실행하지 않는다.
+
     setSelectedCaseKey(caseKey);
-    setCenterRequestCount((prev) => prev + 1);
 
     if (typeof onCaseClickRef.current === "function") {
       onCaseClickRef.current(caseData);
@@ -426,6 +428,17 @@ export default function CaseMap({
 
     window.dispatchEvent(new CustomEvent("caseMapCaseSelect", { detail: caseData }));
   }, [getCaseIdentity]);
+
+  const selectCaseFromMap = useCallback((caseData) => {
+    // 맵 위 점/라벨/기업명/숫자 클릭은 상세 패널만 열고 화면 이동은 하지 않는다.
+    notifyCaseSelect(caseData);
+  }, [notifyCaseSelect]);
+
+  const selectCaseFromList = useCallback((caseData) => {
+    // CaseMap 내부의 보조 리스트도 화면 이동 없이 선택만 처리한다.
+    // 실제 화면 중앙 이동은 SearchPage 추천 TOP5 리스트가 centerTargetId를 내려줄 때만 실행한다.
+    notifyCaseSelect(caseData);
+  }, [notifyCaseSelect]);
 
   const scatterCases = useMemo(() => {
     return cases.map((item, index) => normalizeCase(item, index));
@@ -554,7 +567,7 @@ export default function CaseMap({
     };
   }, [dimensions, viewMode]);
 
-  const centerCaseOnMap = useCallback((targetCase, targetMode = viewMode) => {
+  const centerCaseOnMap = useCallback((targetCase, targetMode = viewMode, duration = 760) => {
     if (!targetCase || !svgRef.current || !zoomRef.current) return;
 
     const point = getRenderedPointForCase(targetCase, targetMode);
@@ -564,17 +577,21 @@ export default function CaseMap({
       .translate(point.innerW / 2 - point.targetX * point.targetScale, point.innerH / 2 - point.targetY * point.targetScale)
       .scale(point.targetScale);
 
-    currentTransformRef.current[targetMode] = nextTransform;
+    const svg = d3.select(svgRef.current);
 
-    d3.select(svgRef.current)
+    svg
+      .interrupt()
       .transition()
-      .duration(430)
-      .ease(d3.easeCubicOut)
-      .call(zoomRef.current.transform, nextTransform);
+      .duration(duration)
+      .ease(d3.easeCubicInOut)
+      .call(zoomRef.current.transform, nextTransform)
+      .on("end", () => {
+        currentTransformRef.current[targetMode] = nextTransform;
+      });
   }, [getRenderedPointForCase, viewMode]);
 
   useEffect(() => {
-    if (!focusCaseId || !svgRef.current) return;
+    if (!focusCaseId) return;
 
     const sourceCases = viewMode === "dynamic" ? dynamicCases : scatterCases;
 
@@ -587,39 +604,37 @@ export default function CaseMap({
 
     if (!targetCase) return;
 
-    const targetKey = getCaseIdentity(targetCase);
-    const centerKey = `${viewMode}:${targetKey}`;
-
-    setSelectedCaseKey(targetKey);
-
-    if (viewMode !== "dynamic") return;
-    if (!zoomRef.current) return;
-    if (lastCenteredCaseRef.current === centerKey) return;
-
-    lastCenteredCaseRef.current = centerKey;
-    centerCaseOnMap(targetCase, viewMode);
-  }, [focusCaseId, scatterCases, dynamicCases, viewMode, centerCaseOnMap, getCaseIdentity]);
+    // focusCaseId는 선택 표시/상세 패널 동기화 용도로만 사용한다.
+    // 여기서 중앙 이동을 하면 맵에서 케이스 클릭 후 드래그할 때
+    // 선택된 케이스로 자동 복귀하는 문제가 생긴다.
+    setSelectedCaseKey(getCaseIdentity(targetCase));
+  }, [focusCaseId, scatterCases, dynamicCases, viewMode, getCaseIdentity]);
 
   useEffect(() => {
-    if (!selectedCaseKey || !svgRef.current) return;
-
-    if (!shouldCenterSelectedRef.current) return;
-
-    shouldCenterSelectedRef.current = false;
-
+    if (!centerTargetId || !svgRef.current) return;
     if (viewMode !== "dynamic") return;
     if (!zoomRef.current) return;
 
-    const sourceCases = dynamicCases;
-    const targetCase = sourceCases.find((item) => getCaseIdentity(item) === selectedCaseKey);
+    const targetCase = dynamicCases.find((item) => {
+      const itemId = String(item.id);
+      const caseIdx = String(item.case_idx);
+
+      return itemId === String(centerTargetId) || caseIdx === String(centerTargetId);
+    });
 
     if (!targetCase) return;
 
-    const centerKey = `${viewMode}:${selectedCaseKey}`;
-    lastCenteredCaseRef.current = centerKey;
+    const targetKey = getCaseIdentity(targetCase);
+    setSelectedCaseKey(targetKey);
 
-    centerCaseOnMap(targetCase, viewMode);
-  }, [selectedCaseKey, centerRequestCount, dynamicCases, viewMode, centerCaseOnMap, getCaseIdentity]);
+    // 추천 TOP5 리스트 클릭으로 들어온 요청만 부드럽게 중앙 이동한다.
+    // 렌더링과 D3 transform 복원이 끝난 뒤 실행되도록 RAF를 두 번 둔다.
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        centerCaseOnMap(targetCase, viewMode, 820);
+      });
+    });
+  }, [centerTargetId, centerRequestKey, dynamicCases, viewMode, centerCaseOnMap, getCaseIdentity]);
 
   useEffect(() => {
     const isTypingTarget = (target) => {
@@ -748,13 +763,13 @@ export default function CaseMap({
       if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
         event.preventDefault();
         const nextCase = findNextCaseByDirection(currentCase, event.key, sourceCases);
-        if (nextCase) notifyCaseSelect(nextCase);
+        if (nextCase) selectCaseFromMap(nextCase);
         return;
       }
 
       if (event.key === "Enter") {
         event.preventDefault();
-        notifyCaseSelect(currentCase);
+        selectCaseFromMap(currentCase);
         return;
       }
 
@@ -775,7 +790,7 @@ export default function CaseMap({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedCaseKey, viewMode, dynamicCases, scatterCases, notifyCaseSelect, getCaseIdentity]);
+  }, [selectedCaseKey, viewMode, dynamicCases, scatterCases, selectCaseFromMap, getCaseIdentity]);
 
 
   const setTooltipFromEvent = (event) => {
@@ -1254,6 +1269,9 @@ export default function CaseMap({
 
     zoomRef.current = zoom;
     svg.call(zoom);
+    // 더블 클릭 시 D3 기본 확대가 발생하면 사용자가 의도하지 않았는데
+    // 화면이 갑자기 확대되어 보이므로 더블 클릭 줌만 비활성화한다.
+    svg.on("dblclick.zoom", null);
 
     const hasSavedDynamicTransform =
       currentTransformRef.current.dynamic &&
@@ -1388,7 +1406,7 @@ export default function CaseMap({
           event.preventDefault();
           event.stopPropagation();
           setHoveredCase(null);
-          notifyCaseSelect(d);
+          selectCaseFromMap(d);
         })
         .on("mouseenter", function (event, d) {
           resetNodeStyles();
@@ -1413,7 +1431,7 @@ export default function CaseMap({
         })
         .on("click", function (event, d) {
           event.stopPropagation();
-          notifyCaseSelect(d);
+          selectCaseFromMap(d);
         });
 
       // 클릭 히트 영역: 점이 작거나 라벨을 눌러도 우측 패널이 열리도록 투명 클릭 영역을 둔다.
@@ -1448,7 +1466,7 @@ export default function CaseMap({
           event.preventDefault();
           event.stopPropagation();
           setHoveredCase(null);
-          notifyCaseSelect(d);
+          selectCaseFromMap(d);
         });
 
       // TOP5 순위는 원 안에 숫자로만 표시한다.
@@ -1478,7 +1496,7 @@ export default function CaseMap({
           event.preventDefault();
           event.stopPropagation();
           setHoveredCase(null);
-          notifyCaseSelect(d);
+          selectCaseFromMap(d);
         })
         .on("mouseenter", function (event, d) {
           resetNodeStyles();
@@ -1499,7 +1517,7 @@ export default function CaseMap({
           event.preventDefault();
           event.stopPropagation();
           setHoveredCase(null);
-          notifyCaseSelect(d);
+          selectCaseFromMap(d);
         })
         .text((d) => getNodeRank(d));
 
@@ -1541,7 +1559,7 @@ export default function CaseMap({
           event.preventDefault();
           event.stopPropagation();
           setHoveredCase(null);
-          notifyCaseSelect(d);
+          selectCaseFromMap(d);
         })
         .on("mouseenter", function (event, d) {
           resetNodeStyles();
@@ -1562,7 +1580,7 @@ export default function CaseMap({
           event.preventDefault();
           event.stopPropagation();
           setHoveredCase(null);
-          notifyCaseSelect(d);
+          selectCaseFromMap(d);
         });
 
       labelGroups
@@ -1693,7 +1711,7 @@ export default function CaseMap({
       })
       .on("click", function (event, d) {
         event.stopPropagation();
-        notifyCaseSelect(d);
+        selectCaseFromMap(d);
       });
 
     const selectedScatterGlow = nodeLayer
@@ -1937,7 +1955,7 @@ export default function CaseMap({
                       key={`${item.case_idx || item.id || item.title}-${index}`}
                       type="button"
                       style={selected ? styles.dynamicCaseListItemActive : styles.dynamicCaseListItem}
-                      onClick={() => notifyCaseSelect(item)}
+                      onClick={() => selectCaseFromList(item)}
                     >
                       <div style={styles.dynamicCaseListItemTop}>
                         <div style={styles.dynamicCaseListItemTitleWrap}>
