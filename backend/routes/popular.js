@@ -154,4 +154,61 @@ router.get("/queries", async (req, res) => {
   }
 });
 
+/**
+ * 케이스별 조회수 조회
+ * GET /api/popular/case-view-counts?ids=1,2,3&days=365
+ */
+router.get("/case-view-counts", async (req, res) => {
+  try {
+    const rawIds = String(req.query.ids || "");
+    const days = Number(req.query.days) || 365;
+
+    const safeDays = Math.min(Math.max(days, 1), 3650);
+
+    const caseIds = rawIds
+      .split(",")
+      .map((id) => Number(id.trim()))
+      .filter((id) => Number.isInteger(id) && id > 0);
+
+    if (caseIds.length === 0) {
+      return res.json({
+        success: true,
+        period_days: safeDays,
+        count: 0,
+        data: [],
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+        c.case_idx,
+        COALESCE(COUNT(v.view_log_idx), 0)::int AS view_count
+      FROM t_case c
+      LEFT JOIN t_case_view_log v
+        ON c.case_idx = v.case_idx
+       AND v.created_at >= NOW() - ($1::int * INTERVAL '1 day')
+      WHERE c.case_idx = ANY($2::bigint[])
+      GROUP BY c.case_idx
+      ORDER BY c.case_idx;
+      `,
+      [safeDays, caseIds]
+    );
+
+    return res.json({
+      success: true,
+      period_days: safeDays,
+      count: result.rows.length,
+      data: result.rows,
+    });
+  } catch (error) {
+    console.error("케이스별 조회수 조회 오류:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "케이스별 조회수 조회 중 서버 오류가 발생했습니다.",
+    });
+  }
+});
+
 module.exports = router;

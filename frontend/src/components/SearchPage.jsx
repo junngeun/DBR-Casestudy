@@ -89,6 +89,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
   const [popularQueries, setPopularQueries] = useState([]);
   const [popularQueryLoading, setPopularQueryLoading] = useState(false);
   const [popularQueryError, setPopularQueryError] = useState(null);
+  const [caseViewCountMap, setCaseViewCountMap] = useState({});
   const [bookmarkedCaseIds, setBookmarkedCaseIds] = useState(new Set());
 
   const [selectedIndustry, setSelectedIndustry] = useState(null);
@@ -313,9 +314,57 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
     }
   };
 
+  const fetchCaseViewCounts = async (caseIds = []) => {
+    const uniqueIds = [...new Set(
+      caseIds
+        .map((id) => Number(id))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    )];
+
+    if (uniqueIds.length === 0) {
+      setCaseViewCountMap({});
+      return;
+    }
+
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/api/popular/case-view-counts?ids=${uniqueIds.join(",")}&days=365`
+      );
+
+      if (!res.ok) {
+        throw new Error("케이스별 조회수를 불러오지 못했습니다.");
+      }
+
+      const json = await res.json();
+
+      if (!json.success || !Array.isArray(json.data)) {
+        throw new Error("케이스별 조회수 데이터 형식이 올바르지 않습니다.");
+      }
+
+      const nextMap = {};
+
+      json.data.forEach((item) => {
+        nextMap[String(item.case_idx)] = Number(item.view_count || 0);
+      });
+
+      setCaseViewCountMap(nextMap);
+    } catch (error) {
+      console.error("케이스별 조회수 로딩 실패:", error);
+      setCaseViewCountMap({});
+    }
+  };
+
   useEffect(() => {
     fetchPopularQueries();
   }, []);
+
+  useEffect(() => {
+    const candidateIds = (result?.map_candidates || [])
+      .map((item) => item.case_idx || item.id)
+      .filter(Boolean);
+
+    fetchCaseViewCounts(candidateIds);
+  }, [result?.map_candidates]);
 
   const handlePopularQueryClick = (keyword) => {
     if (!keyword) return;
@@ -1306,6 +1355,18 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
     };
   });
 
+  const mapCandidatesWithViewCount = (result?.map_candidates || []).map((item) => {
+    const caseId = String(item.case_idx ?? item.id ?? "");
+    const dbViewCount = caseViewCountMap[caseId];
+
+    return {
+      ...item,
+      view_count: Number.isFinite(dbViewCount)
+        ? dbViewCount
+        : Number(item.view_count || 0),
+    };
+  });
+
   const mergeDefinedCaseData = (...sources) => {
     const merged = {};
 
@@ -1883,7 +1944,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
           <div style={styles.mapCol}>
             <CaseMap
               cases={mapCases}
-              mapCandidates={result?.map_candidates || []}
+              mapCandidates={mapCandidatesWithViewCount}
               highlightedIds={recommendedCaseIds}
               focusCaseId={selectedCase?.case_idx || selectedCase?.id || null}
               centerTargetId={centerTargetId}
