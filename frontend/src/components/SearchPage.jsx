@@ -1000,7 +1000,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
         tags: [item.prob_main, item.prob_keyword, item.sol_type].filter(Boolean),
         summary: item.summary,
         similarity: item.final_score != null
-          ? Math.round(Number(item.final_score) * 100)
+          ? Number(item.final_score) * 100
           : null,
         isRecommended: true,
 
@@ -1052,7 +1052,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
         tags: [item.prob_main, item.prob_keyword, item.sol_type].filter(Boolean),
         summary: item.summary,
         similarity: item.final_score != null
-          ? Math.round(Number(item.final_score) * 100)
+          ? Number(item.final_score) * 100
           : item.similarity ?? null,
         isRecommended: item.is_recommended === true || item.isRecommended === true || item.map_group === "recommended" || (item.ranking != null && Number(item.ranking) <= 5),
 

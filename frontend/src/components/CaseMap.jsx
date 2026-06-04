@@ -101,6 +101,61 @@ function getMapScore(item) {
   return null;
 }
 
+function formatMapScorePercent(score) {
+  if (!Number.isFinite(score)) return null;
+  return `${(score * 100).toFixed(1)}%`;
+}
+
+const DYNAMIC_RING_RADIUS = {
+  recommended: 130,
+  related: 260,
+  explore: 390,
+  reference: 520,
+};
+
+function getDynamicCaseScoreInfo(item, topRank = null) {
+  const rank = toFiniteNumber(topRank ?? item.rank ?? item.ranking ?? item.map_rank ?? item.mapRank);
+
+  if (rank !== null && rank >= 1 && rank <= 5) {
+    return {
+      tierLabel: `TOP ${rank}`,
+      scoreLabel: "추천도",
+    };
+  }
+
+  // 실제 케이스맵의 동심원 기준과 호버/리스트 설명을 맞춘다.
+  // 렌더링에서 동심원 최대 반경은 min(width, height) * 0.52이고,
+  // 점 좌표는 min(width, height) / 1000 단위로 환산되므로
+  // 화면상 0.25 / 0.5 / 0.75 / 1.0 링은 논리 좌표 기준 약 130 / 260 / 390 / 520에 해당한다.
+  const radius = toFiniteNumber(item.map_distance ?? item.mapDistance) ?? getDynamicRadius(item);
+
+  if (radius <= DYNAMIC_RING_RADIUS.related) {
+    return {
+      tierLabel: "연관 케이스",
+      scoreLabel: "연관도",
+    };
+  }
+
+  if (radius <= DYNAMIC_RING_RADIUS.explore) {
+    return {
+      tierLabel: "탐색 케이스",
+      scoreLabel: "연관도",
+    };
+  }
+
+  if (radius <= DYNAMIC_RING_RADIUS.reference) {
+    return {
+      tierLabel: "참고 케이스",
+      scoreLabel: "연관도",
+    };
+  }
+
+  return {
+    tierLabel: "참고 후보",
+    scoreLabel: "연관도",
+  };
+}
+
 function getStableFallbackAngle(item, index) {
   const seed = Number(item.case_idx ?? item.id ?? index + 1);
   const safeSeed = Number.isFinite(seed) ? seed : index + 1;
@@ -381,6 +436,8 @@ export default function CaseMap({
   });
   const onCaseClickRef = useRef(onCaseClick);
   const lastSelectRef = useRef({ key: "", time: 0 });
+  const lastHandledCenterRequestKeyRef = useRef(null);
+  const centerRafRef = useRef([]);
 
   const [viewMode, setViewMode] = useState("dynamic");
   const [selectedCaseKey, setSelectedCaseKey] = useState("");
@@ -440,9 +497,41 @@ export default function CaseMap({
     notifyCaseSelect(caseData);
   }, [notifyCaseSelect]);
 
+  const casesSignature = useMemo(() => {
+    return cases
+      .map((item) => [
+        item.case_idx ?? item.id ?? "",
+        item.x ?? "",
+        item.y ?? "",
+        item.rank ?? item.ranking ?? "",
+        item.title ?? "",
+        item.comp_name ?? item.company ?? "",
+        item.view_count ?? item.viewCount ?? "",
+      ].join(":"))
+      .join("|");
+  }, [cases]);
+
+  const mapCandidatesSignature = useMemo(() => {
+    return mapCandidates
+      .map((item) => [
+        item.case_idx ?? item.id ?? "",
+        item.dynamic_x ?? item.dynamicX ?? "",
+        item.dynamic_y ?? item.dynamicY ?? "",
+        item.rank ?? item.ranking ?? item.map_rank ?? item.mapRank ?? "",
+        item.final_score ?? item.finalScore ?? item.similarity ?? "",
+        item.map_group ?? "",
+        item.view_count ?? item.viewCount ?? "",
+      ].join(":"))
+      .join("|");
+  }, [mapCandidates]);
+
+  const highlightedIdsSignature = useMemo(() => {
+    return highlightedIds.map(String).join("|");
+  }, [highlightedIds]);
+
   const scatterCases = useMemo(() => {
     return cases.map((item, index) => normalizeCase(item, index));
-  }, [cases]);
+  }, [casesSignature]);
 
   const dynamicCases = useMemo(() => {
     const source = mapCandidates.length > 0 ? mapCandidates : [];
@@ -457,11 +546,11 @@ export default function CaseMap({
       .map((item, index) => stabilizeDynamicCasePosition(item, index));
 
     return spreadDynamicCasesForReadability(normalized);
-  }, [mapCandidates]);
+  }, [mapCandidatesSignature]);
 
   const highlightedIdSet = useMemo(() => {
     return new Set(highlightedIds.map(String));
-  }, [highlightedIds]);
+  }, [highlightedIdsSignature]);
 
   const isRecommended = useCallback(
     (item) => {
@@ -498,7 +587,7 @@ export default function CaseMap({
 
       return null;
     },
-    [highlightedIds]
+    [highlightedIdsSignature]
   );
 
   useEffect(() => {
@@ -526,7 +615,7 @@ export default function CaseMap({
     }
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewMode, scatterCases, dynamicCases, highlightedIds, dimensions, selectedCaseKey]);
+  }, [viewMode, scatterCases, dynamicCases, highlightedIdsSignature, dimensions]);
 
   const getRenderedPointForCase = useCallback((targetCase, targetMode = viewMode) => {
     if (!targetCase) return null;
@@ -566,6 +655,17 @@ export default function CaseMap({
       targetScale: 1.5,
     };
   }, [dimensions, viewMode]);
+
+  const cancelScheduledCenterMove = useCallback(() => {
+    centerRafRef.current.forEach((rafId) => {
+      if (rafId) window.cancelAnimationFrame(rafId);
+    });
+    centerRafRef.current = [];
+
+    if (svgRef.current) {
+      d3.select(svgRef.current).interrupt();
+    }
+  }, []);
 
   const centerCaseOnMap = useCallback((targetCase, targetMode = viewMode, duration = 760) => {
     if (!targetCase || !svgRef.current || !zoomRef.current) return;
@@ -615,6 +715,13 @@ export default function CaseMap({
     if (viewMode !== "dynamic") return;
     if (!zoomRef.current) return;
 
+    const requestKey = `${centerRequestKey || 0}:${centerTargetId}`;
+
+    // 같은 추천 리스트 클릭 요청은 한 번만 처리한다.
+    // 부모 렌더링이나 mapCandidates 배열 재생성 때문에 dynamicCases가 바뀌어도
+    // 이전 centerTargetId가 다시 실행되어 탐색 중 화면이 튀는 것을 막는다.
+    if (lastHandledCenterRequestKeyRef.current === requestKey) return;
+
     const targetCase = dynamicCases.find((item) => {
       const itemId = String(item.id);
       const caseIdx = String(item.case_idx);
@@ -624,17 +731,32 @@ export default function CaseMap({
 
     if (!targetCase) return;
 
+    lastHandledCenterRequestKeyRef.current = requestKey;
+
     const targetKey = getCaseIdentity(targetCase);
     setSelectedCaseKey(targetKey);
 
+    cancelScheduledCenterMove();
+
     // 추천 TOP5 리스트 클릭으로 들어온 요청만 부드럽게 중앙 이동한다.
-    // 렌더링과 D3 transform 복원이 끝난 뒤 실행되도록 RAF를 두 번 둔다.
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => {
+    // 맵 렌더링과 D3 transform 복원이 끝난 뒤 실행되도록 RAF를 두 번 둔다.
+    const firstRaf = window.requestAnimationFrame(() => {
+      const secondRaf = window.requestAnimationFrame(() => {
+        centerRafRef.current = [];
         centerCaseOnMap(targetCase, viewMode, 820);
       });
+
+      centerRafRef.current = [secondRaf];
     });
-  }, [centerTargetId, centerRequestKey, dynamicCases, viewMode, centerCaseOnMap, getCaseIdentity]);
+
+    centerRafRef.current = [firstRaf];
+  }, [centerTargetId, centerRequestKey, dynamicCases, viewMode, centerCaseOnMap, getCaseIdentity, cancelScheduledCenterMove]);
+
+  useEffect(() => {
+    return () => {
+      cancelScheduledCenterMove();
+    };
+  }, [cancelScheduledCenterMove]);
 
   useEffect(() => {
     const isTypingTarget = (target) => {
@@ -1247,6 +1369,9 @@ export default function CaseMap({
         [innerW * 3.2, innerH * 3.2],
       ])
       .on("start", () => {
+        // 사용자가 직접 드래그/줌을 시작하면 예약된 자동 중앙 이동은 취소한다.
+        // 단, 다음 추천 리스트 클릭으로 들어오는 새 centerRequestKey는 정상 처리된다.
+        cancelScheduledCenterMove();
         mapLayer.select("rect").style("cursor", "grabbing");
       })
       .on("zoom", (event) => {
@@ -1739,6 +1864,111 @@ export default function CaseMap({
     nodeLayer.selectAll(".case-node").raise();
   };
 
+  useEffect(() => {
+    if (!svgRef.current) return;
+
+    const svg = d3.select(svgRef.current);
+    const isDynamicMode = viewMode === "dynamic";
+
+    const isSelected = (item) => Boolean(selectedCaseKey) && getCaseIdentity(item) === selectedCaseKey;
+    const isNodeRecommendedForVisual = (item) => {
+      const rank = Number(item.rank ?? item.ranking ?? item.map_rank ?? item.mapRank);
+      return (
+        item.map_group === "recommended" ||
+        item.isRecommended === true ||
+        item.is_recommended === true ||
+        (Number.isFinite(rank) && rank >= 1 && rank <= 5) ||
+        highlightedIdSet.has(String(item.id)) ||
+        highlightedIdSet.has(String(item.case_idx))
+      );
+    };
+
+    svg.selectAll(".case-node")
+      .attr("r", (d) => {
+        const recommended = isNodeRecommendedForVisual(d);
+        if (isDynamicMode) {
+          if (isSelected(d)) return recommended ? 13.4 : 6.8;
+          return recommended ? 12.6 : 5.2;
+        }
+        if (isSelected(d)) return recommended ? 8.4 : 6.6;
+        return recommended ? 7.5 : 5.5;
+      })
+      .attr("fill-opacity", (d) => {
+        const recommended = isNodeRecommendedForVisual(d);
+        if (isDynamicMode) return isSelected(d) || recommended ? 1 : 0.68;
+        return isSelected(d) || recommended ? 0.98 : 0.62;
+      })
+      .attr("stroke-width", (d) => {
+        const recommended = isNodeRecommendedForVisual(d);
+        if (isDynamicMode) {
+          if (isSelected(d)) return recommended ? 6.2 : 2.4;
+          return recommended ? 5.8 : 1.4;
+        }
+        if (isSelected(d)) return 2.2;
+        return recommended ? 1.5 : 0;
+      });
+
+    svg.selectAll(".dynamic-company-label text")
+      .attr("fill", (d) => {
+        if (isSelected(d)) return "#E86F00";
+        return d.recommended ? "#111827" : "#4b5563";
+      })
+      .attr("fill-opacity", (d) => (d.recommended || isSelected(d) ? 0.96 : 0.86));
+
+    // selectedCaseKey 변경으로 맵 전체를 다시 그리지 않도록 분리했기 때문에,
+    // 선택된 케이스의 은은한 glow만 여기서 별도로 갱신한다.
+    svg.selectAll(".selected-case-glow").remove();
+
+    svg.selectAll(".case-node")
+      .filter((d) => isSelected(d))
+      .each(function (d) {
+        const node = d3.select(this);
+        const parent = d3.select(this.parentNode);
+        const cx = Number(node.attr("cx"));
+        const cy = Number(node.attr("cy"));
+
+        if (!Number.isFinite(cx) || !Number.isFinite(cy)) return;
+
+        const recommended = isNodeRecommendedForVisual(d);
+        const glow = parent
+          .append("g")
+          .attr("class", "selected-case-glow")
+          .attr("transform", `translate(${cx},${cy})`)
+          .style("pointer-events", "none");
+
+        if (isDynamicMode) {
+          glow
+            .append("circle")
+            .attr("r", recommended ? 25 : 17)
+            .attr("fill", getProblemColor(d.prob_main))
+            .attr("fill-opacity", 0.22);
+
+          glow
+            .append("circle")
+            .attr("r", recommended ? 16 : 10)
+            .attr("fill", "#ffffff")
+            .attr("fill-opacity", 0.38);
+        } else {
+          glow
+            .append("circle")
+            .attr("r", 24)
+            .attr("fill", getProblemColor(d.prob_main))
+            .attr("fill-opacity", 0.12);
+
+          glow
+            .append("circle")
+            .attr("r", 15)
+            .attr("fill", getProblemColor(d.prob_main))
+            .attr("fill-opacity", 0.2);
+        }
+      });
+
+    svg.selectAll(".selected-case-glow").lower();
+    svg.selectAll(".case-node").raise();
+    svg.selectAll(".dynamic-top-rank-number").raise();
+    svg.selectAll(".dynamic-company-label").raise();
+  }, [selectedCaseKey, viewMode, highlightedIdSet, getCaseIdentity]);
+
   const doZoom = useCallback((factor) => {
     if (viewMode !== "dynamic") return;
     if (!svgRef.current || !zoomRef.current) return;
@@ -1888,9 +2118,20 @@ export default function CaseMap({
 
             <p style={styles.tooltipSub}>{hoveredCase.sol_type}</p>
 
-            {hoveredCase.similarity !== null && hoveredCase.similarity !== undefined && (
-              <p style={styles.tooltipSimilarity}>유사도 {hoveredCase.similarity}%</p>
-            )}
+            {(() => {
+              const score = getMapScore(hoveredCase);
+              const scoreText = formatMapScorePercent(score);
+
+              if (!scoreText) return null;
+
+              const scoreInfo = getDynamicCaseScoreInfo(hoveredCase);
+
+              return (
+                <p style={styles.tooltipSimilarity}>
+                  {scoreInfo.tierLabel} · {scoreInfo.scoreLabel} {scoreText}
+                </p>
+              );
+            })()}
           </div>
         )}
 
@@ -1944,7 +2185,8 @@ export default function CaseMap({
                 {sortedDynamicCases.map((item, index) => {
                   const topRank = getTopRank(item);
                   const score = getMapScore(item);
-                  const scorePercent = score !== null ? Math.round(score * 100) : null;
+                  const scoreText = formatMapScorePercent(score);
+                  const scoreInfo = getDynamicCaseScoreInfo(item, topRank);
                   const viewCount = getViewCount(item);
                   const issueNo = item.issue_no || item.issueNo || "-";
                   const pubYear = item.pub_year || item.pubYear || item.year || "-";
@@ -1962,8 +2204,10 @@ export default function CaseMap({
                           {topRank && <span style={styles.dynamicCaseTopBadge}>TOP {topRank}</span>}
                           <span style={styles.dynamicCaseListItemTitle}>{item.title}</span>
                         </div>
-                        {scorePercent !== null && (
-                          <span style={styles.dynamicCaseScore}>관련도 {scorePercent}%</span>
+                        {scoreText && (
+                          <span style={styles.dynamicCaseScore}>
+                            {scoreInfo.tierLabel} · {scoreInfo.scoreLabel} {scoreText}
+                          </span>
                         )}
                       </div>
 
