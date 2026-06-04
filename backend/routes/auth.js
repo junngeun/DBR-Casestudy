@@ -2,8 +2,86 @@ const express = require("express");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const pool = require("../config/db");
+const passport = require("passport");
+const GoogleStrategy = require("passport-google-oauth20").Strategy;
 
 const router = express.Router();
+
+passport.use(
+  new GoogleStrategy(
+    {
+      clientID: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      callbackURL: process.env.GOOGLE_CALLBACK_URL,
+    },
+    async (accessToken, refreshToken, profile, done) => {
+      try {
+        const email = profile.emails[0].value;
+        const nickname = profile.displayName;
+        const providerId = profile.id;
+
+        // 기존 소셜 로그인 확인
+        const authResult = await pool.query(
+          `SELECT m.* FROM t_member_auth a
+           JOIN t_member m ON a.member_idx = m.member_idx
+           WHERE a.provider = 'GOOGLE' AND a.provider_user_id = $1`,
+          [providerId]
+        );
+
+        if (authResult.rows.length > 0) {
+          return done(null, authResult.rows[0]);
+        }
+
+        // 이메일로 기존 회원 확인
+        const memberResult = await pool.query(
+          `SELECT * FROM t_member WHERE email = $1`,
+          [email]
+        );
+
+        let member;
+        if (memberResult.rows.length > 0) {
+          member = memberResult.rows[0];
+        } else {
+          // 신규 회원 생성
+          const newMember = await pool.query(
+            `INSERT INTO t_member (email, nickname, signup_type, member_status)
+             VALUES ($1, $2, 'GOOGLE', 'ACTIVE')
+             RETURNING *`,
+            [email, nickname]
+          );
+          member = newMember.rows[0];
+        }
+
+        // t_member_auth에 저장
+        await pool.query(
+          `INSERT INTO t_member_auth (member_idx, provider, provider_user_id)
+           VALUES ($1, 'GOOGLE', $2)`,
+          [member.member_idx, providerId]
+        );
+
+        return done(null, member);
+      } catch (error) {
+        return done(error, null);
+      }
+    }
+  )
+);
+
+// 구글 로그인 시작
+router.get(
+  "/google",
+  passport.authenticate("google", { scope: ["profile", "email"], session: false })
+);
+
+// 구글 콜백
+router.get(
+  "/google/callback",
+  passport.authenticate("google", { session: false, failureRedirect: `${process.env.FRONTEND_URL}/login` }),
+  (req, res) => {
+    const token = createToken(req.user);
+    res.redirect(`${process.env.FRONTEND_URL}?token=${token}`);
+  }
+);
 
 const JWT_SECRET = process.env.JWT_SECRET || "dbr_case_atlas_secret_key";
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";

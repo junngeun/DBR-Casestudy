@@ -54,7 +54,15 @@ function App() {
   };
 
   useEffect(() => {
-    const savedToken = localStorage.getItem("token");
+    // 구글 로그인 콜백 토큰 처리
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlToken = urlParams.get("token");
+    if (urlToken) {
+      localStorage.setItem("token", urlToken);
+      window.history.replaceState({}, "", "/");
+    }
+
+    const savedToken = urlToken || localStorage.getItem("token");
     const savedMember = localStorage.getItem("member");
 
     if (savedMember) {

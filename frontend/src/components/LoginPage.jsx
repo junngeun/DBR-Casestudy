@@ -104,7 +104,7 @@ export default function LoginPage({ onSignup, onSuccess }) {
 
         <button
             style={{ ...styles.socialBtn, background: "#fff", border: "1px solid #e0e0e0", color: "#1a1a1a" }}
-            onClick={() => alert("Google 로그인은 준비 중입니다.")}
+            onClick={() => window.location.href = "http://localhost:3000/api/auth/google"}
           >
             <img
               src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
