@@ -24,14 +24,14 @@ const EXAMPLE_QUERIES = [
 ];
 
 const HERO_KEYWORDS = [
-  "떠나는 고객 문제를",
-  "오르지 않는 매출을",
-  "낮은 구매 전환율을",
-  "오래된 브랜드 이미지를",
-  "막막한 시장 진입 문제를",
-  "줄어드는 재방문을",
-  "늘어나는 운영 비용을",
-  "정체된 성장을",
+  "떠나는 고객 문제가",
+  "오르지 않는 매출이",
+  "낮은 구매 전환율이",
+  "오래된 브랜드 이미지가",
+  "막막한 시장 진입 문제가",
+  "줄어드는 재방문이",
+  "늘어나는 운영 비용이",
+  "정체된 성장이",
 ];
 
 const getStatusLabel = (status) => {
@@ -1551,7 +1551,7 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
               <span key={heroIndex} style={styles.heroKeyword}>
                 {HERO_KEYWORDS[heroIndex]}
               </span>{" "}
-              <span style={{ color: "#E86F00" }}>해결하려 하시나요?</span>
+              <span style={{ color: "#E86F00" }}>고민이신가요?</span>
             </h1>
           </div>
         </div>
