@@ -103,16 +103,16 @@ export default function LoginPage({ onSignup, onSuccess }) {
         </div>
 
         <button
-            style={{ ...styles.socialBtn, background: "#1877F2", border: "none", color: "#fff" }}
-            onClick={() => alert("Facebook 로그인은 준비 중입니다.")}
+            style={{ ...styles.socialBtn, background: "#fff", border: "1px solid #e0e0e0", color: "#1a1a1a" }}
+            onClick={() => alert("Google 로그인은 준비 중입니다.")}
           >
             <img
-              src="https://upload.wikimedia.org/wikipedia/commons/5/51/Facebook_f_logo_%282019%29.svg"
+              src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
               width={18}
               height={18}
-              alt="facebook"
+              alt="google"
             />
-            Facebook으로 시작하기
+            Google로 시작하기
           </button>
 
           <button
@@ -142,10 +142,10 @@ const styles = {
   page: { minHeight: "calc(100vh - 72px)", display: "flex", alignItems: "center", justifyContent: "center", background: "#fff" },
   card: { padding: "2.5rem 2rem", width: 400, boxSizing: "border-box" },
   title: { fontSize: 40, fontWeight: 700, color: "#1a1a1a", marginBottom: 25, textAlign: "center" },
-  socialBtn: { width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "11px", fontSize: 14, border: "1px solid #e0e0e0", borderRadius: 2, cursor: "pointer", fontFamily: "inherit", background: "#fff", marginBottom: 10 },
+  socialBtn: { width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "11px", fontSize: 14, border: "1px solid #e0e0e0", borderRadius: 12, cursor: "pointer", fontFamily: "inherit", background: "#fff", marginBottom: 10 },
   divider: { display: "flex", alignItems: "center", gap: 12, margin: "16px 0", color: "#ccc", fontSize: 13 },
-  input: { width: "100%", padding: "14px 16px", fontSize: 14, borderRadius: 2, outline: "none", marginBottom: 10, boxSizing: "border-box", fontFamily: "inherit", background: "#EAF4FB", color: "#1a1a1a" },
-  submitBtn: { width: "100%", padding: "12px", fontSize: 15, fontWeight: 500, color: "#fff", background: "#E86F00", border: "none", borderRadius: 2, cursor: "pointer", fontFamily: "inherit", marginTop: 4 },
+  input: { width: "100%", padding: "14px 16px", fontSize: 14, borderRadius: 12, outline: "none", marginBottom: 10, boxSizing: "border-box", fontFamily: "inherit", background: "#EAF4FB", color: "#1a1a1a" },
+  submitBtn: { width: "100%", padding: "12px", fontSize: 15, fontWeight: 500, color: "#fff", background: "#E86F00", border: "none", borderRadius: 12, cursor: "pointer", fontFamily: "inherit", marginTop: 4 },
   errorText: { fontSize: 13, color: "#A32D2D", marginBottom: 10, lineHeight: 1.5 },
   footer: { fontSize: 13, fontWeight: 600, color: "#999", textAlign: "center", marginTop: 20 },
   link: { color: "#E86F00", cursor: "pointer", fontWeight: 600 },
