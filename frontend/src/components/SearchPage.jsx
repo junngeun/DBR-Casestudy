@@ -2100,6 +2100,15 @@ export default function SearchPage({ onSearch, searchedCases = [] }) {
               <span style={{ fontSize: 12, color: "#999" }}>{showSelectedList ? "▼" : "▲"} 목록 보기</span>
             </span>
             <div style={{ display: "flex", gap: 8 }}>
+              <button
+                style={styles.bottomBarBtnReset}
+                onClick={() => {
+                  setSelectedCases([]);
+                  setShowSelectedList(false);
+                  setShowCompare(false);
+                  setShowBottomExport(false);
+                }}
+              >초기화</button>
               <button style={styles.bottomBarBtnOutline} onClick={() => { setShowCompare(true); setSelectedCase(null); }}>케이스 비교하기</button>
               <button style={styles.bottomBarBtnFill} onClick={() => setShowBottomExport(true)}>내보내기</button>
             </div>
@@ -2235,14 +2244,14 @@ function PopularRankBoard({
     <div style={styles.popularRankBoard}>
       <div style={styles.popularRankColumn}>
         <div style={styles.popularColumnHeader}>
-          <h3 style={styles.popularTitle}>요즘 뜨는 케이스</h3>
+          <h3 style={styles.popularTitle}>많이 저장한 케이스</h3>
           <span style={styles.popularBadge}>TOP 5</span>
         </div>
 
         {caseLoading && <p style={styles.popularMessage}>인기 케이스를 불러오는 중...</p>}
         {caseError && <p style={styles.popularMessage}>{caseError}</p>}
         {!caseLoading && !caseError && cases.length === 0 && (
-          <p style={styles.popularMessage}>아직 충분한 조회 데이터가 없습니다.</p>
+          <p style={styles.popularMessage}>아직 충분한 저장 데이터가 없습니다.</p>
         )}
 
         {!caseLoading && !caseError && cases.length > 0 && (
@@ -2339,7 +2348,7 @@ function PopularCaseBox({ cases, loading, error, onCaseClick }) {
 
       {!loading && !error && cases.length === 0 && (
         <p style={styles.popularMessage}>
-          아직 충분한 조회 데이터가 없어 케이스를 클릭하면 순위가 쌓입니다.
+          아직 충분한 저장 데이터가 없어 케이스를 클릭하면 순위가 쌓입니다.
         </p>
       )}
 
@@ -4507,6 +4516,7 @@ const styles = {
 
   bottomBar: { position: "fixed", bottom: 0, left: 0, right: 0, background: "#1a1a1a", color: "#fff", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 24px", zIndex: 300, boxShadow: "0 -4px 12px rgba(0,0,0,0.15)" },
   bottomBarText: { fontSize: 14, fontWeight: 500 },
+  bottomBarBtnReset: { padding: "8px 16px", fontSize: 13, color: "#fff", background: "transparent", border: "1px solid #555", borderRadius: 12, cursor: "pointer" },
   bottomBarBtnOutline: { padding: "8px 16px", fontSize: 13, color: "#fff", background: "transparent", border: "1px solid #666", borderRadius: 12, cursor: "pointer" },
   bottomBarBtnFill: { padding: "8px 16px", fontSize: 13, color: "#1a1a1a", background: "#fff", border: "none", borderRadius: 12, cursor: "pointer" },
 

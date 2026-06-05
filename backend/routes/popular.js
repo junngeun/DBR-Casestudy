@@ -4,7 +4,7 @@ const pool = require("../config/db");
 const router = express.Router();
 
 /**
- * 많이 조회된 케이스 TOP N
+ * 많이 저장한 케이스 TOP N
  * GET /api/popular/cases?limit=10&days=7
  */
 router.get("/cases", async (req, res) => {
@@ -37,11 +37,12 @@ router.get("/cases", async (req, res) => {
         c.perf_dir,
         c.x,
         c.y,
-        COUNT(v.view_log_idx)::int AS view_count
-      FROM t_case_view_log v
+        COUNT(b.bookmark_idx)::int AS bookmark_count,
+        COUNT(b.bookmark_idx)::int AS view_count
+      FROM t_case_bookmark b
       JOIN t_case c
-        ON c.case_idx = v.case_idx
-      WHERE v.created_at >= NOW() - ($1::int * INTERVAL '1 day')
+        ON c.case_idx = b.case_idx
+      WHERE b.created_at >= NOW() - ($1::int * INTERVAL '1 day')
       GROUP BY
         c.case_idx,
         c.chapter_title,
@@ -63,7 +64,7 @@ router.get("/cases", async (req, res) => {
         c.x,
         c.y
       ORDER BY
-        view_count DESC,
+        bookmark_count DESC,
         c.pub_year DESC,
         c.case_idx DESC
       LIMIT $2;
@@ -78,11 +79,11 @@ router.get("/cases", async (req, res) => {
       data: result.rows,
     });
   } catch (error) {
-    console.error("인기 케이스 조회 오류:", error);
+    console.error("많이 저장한 케이스 조회 오류:", error);
 
     return res.status(500).json({
       success: false,
-      message: "인기 케이스 조회 중 서버 오류가 발생했습니다.",
+      message: "많이 저장한 케이스 조회 중 서버 오류가 발생했습니다.",
     });
   }
 });
