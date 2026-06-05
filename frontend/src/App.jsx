@@ -19,6 +19,10 @@ function App() {
   const [bookmarkCount, setBookmarkCount] = useState(0);
   const [signupHover, setSignupHover] = useState(false);
   const [loginHover, setLoginHover] = useState(false);
+  const [caseRequestHover, setCaseRequestHover] = useState(false);
+  const [historyHover, setHistoryHover] = useState(false);
+  const [bookmarkHover, setBookmarkHover] = useState(false);
+  const [logoutHover, setLogoutHover] = useState(false);
   
   // 말풍선 표시 상태
   const [showTooltip, setShowTooltip] = useState(false);
@@ -224,73 +228,37 @@ useEffect(() => {
 
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
           
-          {/* 1. 케이스 요청 버튼 + 말풍선 */}
-          <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
-            
-            {/* 말풍선을 버튼의 왼쪽으로 배치 (left: "100%" -> right: "100%", margin 방향 변경) */}
-            {showTooltip && (
-              <div 
-                style={{ 
-                  position: "absolute", 
-                  top: "50%", 
-                  right: "100%", 
-                  marginRight: "12px", 
-                  zIndex: 50,
-                  animation: "tooltip-bounce 2s infinite"
-                }}
-              >
-                <div 
-                  style={{ 
-                    position: "relative", 
-                    backgroundColor: "#E86F00", 
-                    color: "#ffffff", 
-                    fontSize: "13px", 
-                    fontWeight: "bold", 
-                    padding: "6px 12px", 
-                    borderRadius: "8px", 
-                    boxShadow: "0 2px 8px rgba(0,0,0,0.15)", 
-                    cursor: "pointer", 
-                    whiteSpace: "nowrap" 
-                  }}
-                  onClick={() => setShowTooltip(false)}
-                >
-                  찾으시는 케이스가 없나요? 👀
-                  {/* 말풍선 꼬리를 오른쪽으로 변경 */}
-                  <div style={{ 
-                    position: "absolute", 
-                    top: "50%", 
-                    right: "-10px", 
-                    transform: "translateY(-50%)", 
-                    border: "5px solid transparent", 
-                    borderLeftColor: "#E86F00" 
-                  }}></div>
-                </div>
-              </div>
-            )}
-
-            <button
-              onClick={() => {
-                setShowTooltip(false);
-                navigateTo("request");
-              }}
-              style={styles.iconHeaderBtn}
-              title="신규 케이스 요청"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
-                <line x1="12" y1="8" x2="12" y2="12"></line>
-                <line x1="10" y1="10" x2="14" y2="10"></line>
-              </svg>
-            </button>
-          </div>
+          {/* 1. 케이스 요청 버튼 */}
+          <button
+            onClick={() => {
+              setShowTooltip(false);
+              navigateTo("request");
+            }}
+            onMouseEnter={() => setCaseRequestHover(true)}
+            onMouseLeave={() => setCaseRequestHover(false)}
+            style={{
+              ...styles.caseRequestCtaBtn,
+              background: caseRequestHover ? "#E86F00" : "#FFF",
+              color: caseRequestHover ? "#FFF" : "#E86F00",
+              borderColor: caseRequestHover ? "#E86F00" : "#E0E0E0",
+            }}
+            title="신규 케이스 요청"
+          >
+            필요한 케이스가 있으신가요? 👀
+          </button>
 
           {/* 2. 최근 본 케이스 버튼 */}
           <button
             onClick={() => navigateTo("history")}
-            style={styles.iconHeaderBtn}
+            onMouseEnter={() => setHistoryHover(true)}
+            onMouseLeave={() => setHistoryHover(false)}
+            style={{
+              ...styles.iconHeaderBtn,
+              borderColor: historyHover ? "#E86F00" : "#e0e0e0",
+            }}
             title="최근 본 케이스"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={historyHover ? "#E86F00" : "#444"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10"></circle>
               <polyline points="12 6 12 12 16 14"></polyline>
             </svg>
@@ -298,11 +266,16 @@ useEffect(() => {
 
           {/* 3. 북마크 버튼 */}
           <button
-            style={styles.iconHeaderBtn}
+            style={{
+              ...styles.iconHeaderBtn,
+              borderColor: bookmarkHover ? "#E86F00" : "#e0e0e0",
+            }}
+            onMouseEnter={() => setBookmarkHover(true)}
+            onMouseLeave={() => setBookmarkHover(false)}
             onClick={handleBookmarkPageClick}
             title="북마크"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={bookmarkHover ? "#E86F00" : "#444"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
             </svg>
 
@@ -320,7 +293,14 @@ useEffect(() => {
                   {member.nickname || member.email}님
                 </span>
                 <button
-                  style={{ padding: "8px 16px", fontSize: 14, color: "#666", background: "transparent", border: "1px solid #e0e0e0", borderRadius: 8, cursor: "pointer", fontFamily: "inherit" }}
+                  style={{
+                    ...styles.logoutBtn,
+                    color: logoutHover ? "#E86F00" : "#666",
+                    borderColor: logoutHover ? "#E86F00" : "#e0e0e0",
+                    // background: logoutHover ? "#fff7ed" : "transparent",
+                  }}
+                  onMouseEnter={() => setLogoutHover(true)}
+                  onMouseLeave={() => setLogoutHover(false)}
                   onClick={handleLogout}
                 >
                   로그아웃
@@ -401,6 +381,26 @@ const styles = {
     boxSizing: "border-box",
   },
 
+  caseRequestCtaBtn: {
+    background: "#FFF",
+    color: "#E86F00",
+    border: "1px solid #E0E0E0",
+    cursor: "pointer",
+    padding: "9px 16px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 999,
+    minWidth: 188,
+    height: 38,
+    fontSize: 13,
+    fontWeight: 800,
+    fontFamily: "'Pretendard', 'Noto Sans KR', 'Apple SD Gothic Neo', Arial, sans-serif",
+    whiteSpace: "nowrap",
+    transition: "all 0.18s ease",
+    // boxShadow: "0 4px 12px rgba(232, 111, 0, 0.18)",
+  },
+
   iconHeaderBtn: {
     position: "relative",
     background: "#fff",
@@ -413,6 +413,18 @@ const styles = {
     borderRadius: "50%",
     width: 38,
     height: 38,
+    transition: "all 0.18s ease",
+  },
+  logoutBtn: {
+    padding: "8px 16px",
+    fontSize: 14,
+    color: "#666",
+    background: "transparent",
+    border: "1px solid #e0e0e0",
+    borderRadius: 8,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    transition: "all 0.18s ease",
   },
 
   bookmarkCountBadge: {
