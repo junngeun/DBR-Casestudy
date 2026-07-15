@@ -135,7 +135,7 @@ export default function SignupPage({ onLogin, onSuccess }) {
         </div>
 
         <button style={{ ...styles.socialBtn, background: "#fff", border: "1px solid #e0e0e0", color: "#1a1a1a" }}
-                onClick={() => window.location.href = "http://localhost:3000/api/auth/google"}
+                onClick={() => window.location.href = `${API_BASE_URL}/api/auth/google`}
         >
           <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width={18} height={18} alt="google" />
           Google로 가입하기
