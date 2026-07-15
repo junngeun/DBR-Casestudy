@@ -216,7 +216,7 @@ export const styles = {
 
   bottomBrowseSection: { width: 1000, margin: "0 auto 5rem", padding: "0 2rem", boxSizing: "border-box" },
   btnBrowseAll: { width: "100%", padding: "14px", fontSize: 16, fontWeight: 600, color: "#1a1a1a", background: "#f0f0f0", border: "none", borderRadius: 12, cursor: "pointer", transition: "all 0.2s" },
-  allListWrapper: { background: "#fff", border: "1px solid #ede8e2", borderRadius: 2, padding: 24, marginTop: 10 },
+  allListWrapper: { background: "#fff", border: "1px solid #ede8e2", borderRadius: 12, padding: 24, marginTop: 10 },
   allListHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
   allListTitle: { fontSize: 18, fontWeight: 700, color: "#1a1a1a", margin: 0 },
   btnCloseAll: { background: "none", border: "none", fontSize: 14, color: "#888", cursor: "pointer", fontWeight: 500 },
@@ -228,7 +228,7 @@ export const styles = {
   archiveTitle: { fontSize: 18, fontWeight: 900, color: "#1a1a1a", marginBottom: 4 },
   archiveCompany: { fontSize: 15, color: "#666", marginBottom: 8 },
   archiveSummary: { fontSize: 14, color: "#666", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
-  btnLoadMore: { padding: "12px 120px", fontSize: 14, fontWeight: 600, color: "#E86F00", background: "#fff", border: "1px solid #E86F00", borderRadius: 2, cursor: "pointer" },
+  btnLoadMore: { padding: "12px 120px", fontSize: 14, fontWeight: 600, color: "#E86F00", background: "#fff", border: "1px solid #E86F00", borderRadius: 12, cursor: "pointer" },
 
   panel: { position: "fixed", top: 72, right: 0, width: 420, height: "calc(100vh - 72px)", background: "#fff", borderLeft: "1px solid #e0e0e0", boxShadow: "-4px 0 20px rgba(0,0,0,0.08)", zIndex: 200, padding: "2rem", boxSizing: "border-box", overflowY: "auto", display: "flex", flexDirection: "column" },
   panelHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 },
