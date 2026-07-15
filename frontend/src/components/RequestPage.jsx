@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { styles } from "./RequestPage.styles";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
 const INDUSTRIES = ["IT·플랫폼", "커머스", "리테일", "식음료", "금융", "물류·운송", "제조", "콘텐츠·미디어", "헬스케어", "부동산·공간", "기타"];
@@ -169,45 +170,3 @@ export default function RequestPage({ onBack }) {
   );
 }
 
-const styles = {
-  page: { height: "100vh", background: "#fff", padding: "2.5rem 2rem", display: "flex", flexDirection: "column", alignItems: "center", overflow: "hidden" },
-  pageHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "2rem", paddingBottom: "1.25rem", borderBottom: "2px solid #E86F00", width: "100%", maxWidth: 1040 },
-  pageTitle: {
-    fontSize: 26,
-    fontWeight: 800,
-    color: "#1a1a1a",
-    margin: 0,
-    letterSpacing: "-0.02em",
-  },
-  count: {
-    fontSize: 14,
-    color: "#E86F00",
-    fontWeight: 700,
-    background: "#FEF0E9",
-    padding: "4px 11px",
-    borderRadius: 20,
-  },
-  backBtn: { fontSize: 14, color: "#777", background: "#fff", border: "1px solid #e8e8e8", borderRadius: 20, padding: "8px 14px", cursor: "pointer", fontFamily: "'Pretendard', 'Apple SD Gothic Neo', sans-serif" },
-  layout: { display: "flex", gap: 32, width: "100%", maxWidth: 1040, alignItems: "flex-start", height: "100%" },
-  leftSection: { flex: "1 1 45%", background: "#fff", padding: "40px", borderRadius: 12, border: "1px solid #ede8e2" },
-  title: { fontSize: 24, fontWeight: 800, marginBottom: 20 },
-  form: { display: "flex", flexDirection: "column", gap: 16 },
-  input: { padding: "12px", border: "1px solid #e0e0e0", borderRadius: 12 },
-  select: { padding: "12px", border: "1px solid #e0e0e0", borderRadius: 12 },
-  textarea: { padding: "12px", border: "1px solid #e0e0e0", borderRadius: 12, minHeight: 100 },
-  toggleWrapper: { display: "flex", alignItems: "center", gap: 10, cursor: "pointer" },
-  toggleBg: { position: "relative", width: 44, height: 24, borderRadius: 12 },
-  toggleKnob: { position: "absolute", top: 2, width: 20, height: 20, borderRadius: "50%", background: "#fff" },
-  toggleText: { fontSize: 14, fontWeight: 600 },
-  submitBtn: { padding: "14px", background: "#E86F00", color: "#fff", border: "none", borderRadius: 12, cursor: "pointer" },
-  rightSection: { flex: "1 1 55%", display: "flex", flexDirection: "column", gap: 16, height: "100%", overflow: "hidden" },
-  controls: { display: "flex", gap: 8 },
-  searchInput: { padding: "12px", border: "1px solid #e0e0e0", borderRadius: 12 },
-  sortSelect: { padding: "12px", border: "1px solid #e0e0e0", borderRadius: 12 },
-  feedList: { display: "flex", flexDirection: "column", gap: 16, overflowY: "auto", flex: 1, paddingRight: 4 },
-  feedCard: { background: "#fff", padding: "20px", borderRadius: 12, border: "1px solid #ede8e2" },
-  feedCardBottom: { display: "flex", justifyContent: "flex-end", marginTop: 16 },
-  feedContent: { fontSize: 14, color: "#555", lineHeight: 1.6 },
-  deleteBtn: { background: "#fff", border: "1px solid #ff4d4f", color: "#ff4d4f", borderRadius: 12, padding: "6px 12px", cursor: "pointer", marginRight: 8 },
-  likeBtn: { border: "1px solid", borderRadius: 12, padding: "6px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }
-};

@@ -7,6 +7,7 @@ import SearchPage from './components/SearchPage'
 import BookmarkPage from './components/BookmarkPage'
 import HistoryPage from './components/HistoryPage'
 import RequestPage from './components/RequestPage'
+import { styles } from "./App.styles";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
 
@@ -370,84 +371,5 @@ useEffect(() => {
   );
 }
 
-const styles = {
-  headerInner: {
-    width: "calc(100% - 280px)",
-    maxWidth: 1500,
-    height: "100%",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    boxSizing: "border-box",
-  },
-
-  caseRequestCtaBtn: {
-    background: "#FFF",
-    color: "#E86F00",
-    border: "1px solid #E0E0E0",
-    cursor: "pointer",
-    padding: "9px 16px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 999,
-    minWidth: 188,
-    height: 38,
-    fontSize: 13,
-    fontWeight: 800,
-    fontFamily: "'Pretendard', 'Noto Sans KR', 'Apple SD Gothic Neo', Arial, sans-serif",
-    whiteSpace: "nowrap",
-    transition: "all 0.18s ease",
-    // boxShadow: "0 4px 12px rgba(232, 111, 0, 0.18)",
-  },
-
-  iconHeaderBtn: {
-    position: "relative",
-    background: "#fff",
-    border: "1px solid #e0e0e0",
-    cursor: "pointer",
-    padding: "8px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: "50%",
-    width: 38,
-    height: 38,
-    transition: "all 0.18s ease",
-  },
-  logoutBtn: {
-    padding: "8px 16px",
-    fontSize: 14,
-    color: "#666",
-    background: "transparent",
-    border: "1px solid #e0e0e0",
-    borderRadius: 8,
-    cursor: "pointer",
-    fontFamily: "inherit",
-    transition: "all 0.18s ease",
-  },
-
-  bookmarkCountBadge: {
-    position: "absolute",
-    top: -7,
-    right: -7,
-    minWidth: 17,
-    height: 17,
-    padding: "0 5px",
-    borderRadius: 999,
-    background: "#E86F00",
-    color: "#fff",
-    fontSize: 10,
-    fontWeight: 800,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    lineHeight: "17px",
-    boxSizing: "border-box",
-    border: "2px solid #fff",
-    boxShadow: "0 1px 4px rgba(232, 111, 0, 0.35)",
-    zIndex: 2,
-  },
-};
 
 export default App;
